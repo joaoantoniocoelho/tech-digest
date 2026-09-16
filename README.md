@@ -1,42 +1,128 @@
 # Tech Digest
 
-A lightweight, self-hosted tech news digest running on my home server.
+A self-hosted personal technology news filter powered by local AI.
 
-The goal is simple: collect articles from RSS/Atom feeds, store only new entries, and eventually generate a curated daily digest based on the topics I care about.
+Tech Digest collects articles from RSS and Atom feeds, analyzes them locally using an Ollama model, and assigns a personalized relevance score based on my interests.
 
-The project is intentionally small and local-first.
+The goal is not to summarize the internet.
+
+The goal is to answer a much simpler question:
+
+> Which links are actually worth opening?
+
+## Goals
+
+Tech Digest is designed to:
+
+- collect technology articles automatically;
+- avoid showing the same article twice;
+- extract article content only temporarily;
+- analyze articles locally using Ollama;
+- rank articles based on a personal interest profile;
+- eventually deliver a small daily digest through Telegram and/or email.
+
+The final digest is intentionally lightweight.
+
+Each recommended article should contain roughly:
+
+```text
+Article title
+
+Why it may be worth reading.
+
+Source
+Link
+```
+
+The original article remains the destination.
+
+## Principles
+
+### Local-first
+
+Article analysis runs on my home server using Ollama.
+
+No external LLM API is required.
+
+### Do not republish articles
+
+Full article text is used temporarily for classification and is not stored in the database.
+
+The persisted output contains metadata and derived information such as:
+
+- relevance score;
+- topics;
+- why the article may be interesting.
+
+### Filter, do not summarize
+
+The system is primarily a reading filter.
+
+It should help reduce information overload instead of creating another large body of generated text.
+
+### Explainable ranking
+
+The language model does not directly choose the final relevance score.
+
+Instead:
+
+1. the model extracts a feature vector describing the article;
+2. deterministic Python code converts those features into a relevance score.
+
+This makes ranking easier to inspect and tune.
+
+## Current Architecture
+
+```text
+RSS / Atom
+    |
+    v
+Feed Collector
+    |
+    v
+SQLite
+    |
+    v
+Article URL
+    |
+    v
+HTTPX
+    |
+    v
+Trafilatura
+    |
+    v
+Temporary article text
+    |
+    v
+Ollama / Qwen
+    |
+    v
+Feature Vector
+    |
+    v
+Python Scoring
+    |
+    v
+SQLite
+```
+
+The extracted article text exists only during processing and is discarded afterward.
 
 ## Current Features
 
-* RSS and Atom feed collection
-* Configurable sources through YAML
-* SQLite persistence
-* URL-based deduplication
-* Dockerized execution
-* Periodic collection using cron
-* Simple execution logs with timestamps
-
-## Architecture
-
-```text
-RSS / Atom feeds
-       |
-       v
-   Collector
-       |
-       v
-     SQLite
-       |
-       v
-Future processing
-       |
-       v
-Daily digest
-```
-
-The collector runs as a short-lived Docker job instead of a continuously running service.
-
-The host periodically starts the container, collects new articles, persists them to SQLite, and exits.
+- RSS and Atom feed collection
+- YAML-based source configuration
+- SQLite persistence
+- URL-based deduplication
+- Dockerized collector
+- Scheduled collection through cron
+- Article extraction using HTTPX and Trafilatura
+- Local classification using Ollama
+- Structured model output using JSON Schema
+- Deterministic relevance scoring
+- Personalized interest profile
+- Processing logs
 
 ## Project Structure
 
@@ -45,42 +131,37 @@ tech-digest/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py
+│   ├── rss.py
 │   ├── db.py
-│   └── rss.py
+│   ├── content.py
+│   ├── classifier.py
+│   ├── processor.py
+│   └── scoring.py
+│
 ├── config/
-│   └── sources.yaml
+│   ├── sources.yaml
+│   └── interests.yaml
+│
 ├── data/
+│   └── digest.db
+│
 ├── logs/
+│
+├── docs/
+│   ├── architecture.md
+│   ├── relevance-scoring.md
+│   ├── operations.md
+│   └── roadmap.md
+│
 ├── Dockerfile
 ├── compose.yaml
 ├── requirements.txt
 └── README.md
 ```
 
-## Sources
+## Running the Collector
 
-Feeds are configured in:
-
-```text
-config/sources.yaml
-```
-
-Example:
-
-```yaml
-sources:
-  - name: Hacker News
-    url: https://news.ycombinator.com/rss
-
-  - name: Simon Willison
-    url: https://simonwillison.net/atom/everything/
-```
-
-Adding a new source only requires adding another feed to this file.
-
-## Running Locally
-
-Create a virtual environment:
+Create and activate a virtual environment:
 
 ```bash
 python3 -m venv .venv
@@ -90,10 +171,10 @@ source .venv/bin/activate
 Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
-Run the collector:
+Run the feed collector:
 
 ```bash
 python -m app.main
@@ -101,86 +182,53 @@ python -m app.main
 
 ## Running with Docker
 
-Build the image:
+Build:
 
 ```bash
 docker compose build
 ```
 
-Run the collector:
+Run:
 
 ```bash
 docker compose run --rm digest
 ```
 
-The SQLite database is persisted on the host through:
+The SQLite database is persisted outside the container through the `data/` directory.
 
-```text
-./data/digest.db
-```
+## Article Processing
 
-so recreating the container does not remove collected articles.
-
-## Scheduling
-
-The collector is designed to run periodically instead of staying online continuously.
-
-For example, the following cron entry runs it every hour:
-
-```cron
-0 * * * * cd /path/to/tech-digest && /usr/bin/docker compose run --rm digest >> logs/collector.log 2>&1
-```
-
-Logs can then be inspected with:
+Articles can currently be processed manually with:
 
 ```bash
-tail -n 50 logs/collector.log
+python -c "from app.processor import process_articles; process_articles()"
 ```
 
-## Database
+The processor:
 
-Articles are stored in SQLite with fields such as:
+1. selects unprocessed articles;
+2. downloads the page;
+3. extracts readable content;
+4. sends the temporary text to the local Ollama model;
+5. obtains a structured feature vector;
+6. calculates a deterministic relevance score;
+7. stores only the derived result.
 
-```text
-id
-source
-title
-url
-published_at
-discovered_at
-```
+Automatic article processing is planned as the next stage.
 
-Article URLs are unique, which prevents the same item from being stored multiple times.
+## Documentation
 
-## Roadmap
+More details:
 
-The next steps are:
+- [Architecture](docs/architecture.md)
+- [Relevance Scoring](docs/relevance-scoring.md)
+- [Operations](docs/operations.md)
+- [Roadmap](docs/roadmap.md)
 
-* Fetch and extract the full article content
-* Improve feed and network error handling
-* Rank articles by relevance
-* Generate summaries locally using Ollama
-* Build a daily digest
-* Deliver the digest through Telegram
-* Add optional feedback-based personalization
+## Status
 
-## Philosophy
+Tech Digest is currently under active development.
 
-This project is intentionally simple.
+The collection and relevance-analysis pipeline is functional.
 
-No Kubernetes, no message queues, no external database, and no unnecessary infrastructure.
-
-The core stack is:
-
-```text
-Python
-SQLite
-Docker
-Cron
-```
-
-More components will only be added when they solve an actual problem.
-
-## License
-
-Personal project. License TBD.
+The next major milestone is automatic processing of newly collected articles followed by digest generation and Telegram delivery.
