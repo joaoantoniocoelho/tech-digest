@@ -1,0 +1,6 @@
+sources:
+  - name: Hacker News
+    url: https://news.ycombinator.com/rss
+
+  - name: Simon Willison
+    url: https://simonwillison.net/atom/everything/

@@ -1,0 +1,7 @@
+services:
+  digest:
+    build: .
+    container_name: tech-digest
+    volumes:
+      - ./data:/app/data
+    restart: "no"
