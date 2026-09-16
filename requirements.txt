@@ -1,2 +1,5 @@
 feedparser
 PyYAML
+trafilatura
+httpx
+zstandard

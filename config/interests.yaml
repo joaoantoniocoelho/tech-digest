@@ -1,0 +1,177 @@
+features:
+  major_ai_model_development:
+    description: >
+      The article is mainly about a major new AI or large language model,
+      a significant capability jump, or a broadly important model release.
+      Ordinary use of an existing model does not qualify.
+    weight: 55
+
+  ai_agents:
+    description: >
+      AI agents or agentic systems that plan, use tools, take actions,
+      or autonomously complete multi-step tasks are an important subject.
+      Ordinary AI inference or automation does not qualify.
+    weight: 50
+
+  ai_assisted_software_engineering:
+    description: >
+      AI is materially used for writing, reviewing, debugging, designing,
+      reverse-engineering, or otherwise building software, or the article
+      directly discusses AI-assisted software development workflows.
+    weight: 50
+
+  developer_tools:
+    description: >
+      The article is substantially about tools, products, platforms,
+      or workflows specifically intended for software developers.
+    weight: 45
+
+  software_engineering_practices:
+    description: >
+      The article substantially discusses software architecture, engineering
+      trade-offs, reliability, testing, maintainability, system design,
+      incidents, technical decision-making, or how software is engineered.
+      Mere implementation detail is not enough.
+    weight: 50
+
+  engineering_culture_teams:
+    description: >
+      Engineering culture, software teams, organizational practices,
+      management, engineering processes, collaboration, or how engineering
+      organizations operate are important subjects.
+    weight: 45
+
+  security:
+    description: >
+      Security is an important subject, including vulnerabilities,
+      authentication, cryptography, integrity, provenance, exploits,
+      malware, or software supply-chain security.
+    weight: 50
+
+  leading_tech_company_major_development:
+    description: >
+      The article concerns a genuinely significant product, strategy,
+      platform, or technology development from a leading technology or
+      AI company. Routine company announcements do not qualify.
+    weight: 40
+
+  apple_ecosystem:
+    description: >
+      Apple products, platforms, Apple Silicon, operating systems,
+      developer technologies, platform internals, or other substantial
+      Apple ecosystem topics are important to the article.
+    weight: 45
+
+  practical_ai_research:
+    description: >
+      The article discusses AI research, model capabilities, training,
+      inference, benchmarks, architectures, or methods with meaningful
+      practical implications.
+    weight: 35
+
+  startups_saas_indie:
+    description: >
+      Startups, SaaS products, indie hacking, product building,
+      monetization, distribution, or founder experiences are important topics.
+    weight: 30
+
+  software_industry_orgs:
+    description: >
+      The software industry, technology companies, engineering organizations,
+      or broader changes in how software companies operate are important topics.
+    weight: 30
+
+  developer_careers_job_market:
+    description: >
+      Software engineering careers, hiring, compensation, job markets,
+      career progression, or the changing role of developers are important topics.
+    weight: 30
+
+  open_source:
+    description: >
+      Open-source software, open-source development, project governance,
+      or a meaningful open-source release is an important aspect.
+    weight: 22
+
+  programming_languages_frameworks:
+    description: >
+      Programming languages, frameworks, runtimes, language design,
+      or substantial language ecosystem developments are important subjects.
+    weight: 22
+
+  databases_developer_infrastructure:
+    description: >
+      Databases, developer infrastructure, deployment systems,
+      observability, cloud tooling, or infrastructure directly used
+      to build and operate software are important subjects.
+    weight: 30
+
+  self_hosting_local_ai:
+    description: >
+      Self-hosting, homelabs, running local services, local AI inference,
+      Ollama-like systems, or personally operated infrastructure are important.
+    weight: 35
+
+  privacy:
+    description: >
+      User privacy, privacy-preserving technology, data protection,
+      tracking prevention, or privacy engineering are important subjects.
+    weight: 30
+
+  interesting_software_project:
+    description: >
+      The article presents an unusual, creative, or technically interesting
+      software project where the software itself is a meaningful part
+      of what makes the project interesting.
+    weight: 25
+
+  deep_infrastructure:
+    description: >
+      The article is primarily about highly specialized low-level infrastructure,
+      protocols, kernel internals, embedded systems, or similarly narrow
+      infrastructure topics with limited general applicability.
+    weight: -8
+
+  theoretical_ai:
+    description: >
+      The article is primarily theoretical AI or mathematical research
+      without clear practical implications.
+    weight: -10
+
+  hardware_project:
+    description: >
+      The article is primarily a hardware, electronics, FPGA, maker,
+      or physical computing project where software is secondary.
+    weight: -8
+
+  generic_consumer_tech:
+    description: >
+      The article is generic consumer technology news without meaningful
+      engineering, AI, security, software, or industry depth.
+    weight: -12
+
+  routine_corporate:
+    description: >
+      The article is primarily a routine corporate announcement,
+      personnel update, marketing announcement, or minor company news.
+    weight: -12
+
+  crypto_web3:
+    description: >
+      Cryptocurrency, blockchain, NFTs, tokens, decentralized finance,
+      or Web3 are the main subject. Cryptography, encryption, digital
+      signatures, authentication, and security technologies by themselves
+      do NOT qualify.
+    weight: -18
+
+  gadget_review:
+    description: >
+      The article is primarily a conventional gadget review
+      or consumer buying recommendation.
+    weight: -15
+
+  entertainment_culture:
+    description: >
+      Entertainment, music, celebrity, arts, or general culture
+      are the main subject without a strong technology angle.
+    weight: -18
