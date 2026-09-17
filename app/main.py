@@ -1,9 +1,10 @@
+from datetime import datetime
 from pathlib import Path
 
 import yaml
 
-from datetime import datetime
 from app.db import init_db, save_article
+from app.processor import process_articles
 from app.rss import fetch_feed
 
 
@@ -24,8 +25,12 @@ def main():
 
     total_new = 0
 
+    print()
+    print("Collecting feeds...")
+
     for source in config["sources"]:
-        print(f"\nChecking {source['name']}...")
+        print()
+        print(f"Checking {source['name']}...")
 
         articles = fetch_feed(
             name=source["name"],
@@ -44,10 +49,23 @@ def main():
 
         print(f"{source_new} new articles")
 
-    finished_at = datetime.now().astimezone()
     print()
-    print(f"Total: {total_new} new articles")
+    print(f"Collection complete: {total_new} new articles")
+
+    print()
+    print("=" * 60)
+    print("Processing articles")
+    print("=" * 60)
+
+    process_articles()
+
+    finished_at = datetime.now().astimezone()
+
+    print()
+    print("=" * 60)
     print(f"Run finished at: {finished_at.isoformat(timespec='seconds')}")
+    print("=" * 60)
+
 
 if __name__ == "__main__":
     main()

@@ -25,74 +25,111 @@ def init_db():
                 title TEXT NOT NULL,
                 url TEXT NOT NULL UNIQUE,
                 published_at TEXT,
-                discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                relevance_score INTEGER,
+                why_interesting TEXT,
+                topics TEXT,
+                processed_at TEXT,
+                feed_excerpt TEXT,
+                processing_attempts INTEGER NOT NULL DEFAULT 0,
+                last_processing_error TEXT,
+                failed_at TEXT,
+                delivered_at TEXT
             )
             """
         )
 
         columns = {
             row["name"]
-            for row in connection.execute("PRAGMA table_info(articles)")
+            for row in connection.execute(
+                "PRAGMA table_info(articles)"
+            )
         }
 
-        if "relevance_score" not in columns:
-            connection.execute(
-                """
-                ALTER TABLE articles
-                ADD COLUMN relevance_score INTEGER
-                """
-            )
+        migrations = {
+            "relevance_score":
+                "ALTER TABLE articles ADD COLUMN relevance_score INTEGER",
 
-        if "why_interesting" not in columns:
-            connection.execute(
-                """
-                ALTER TABLE articles
-                ADD COLUMN why_interesting TEXT
-                """
-            )
+            "why_interesting":
+                "ALTER TABLE articles ADD COLUMN why_interesting TEXT",
 
-        if "topics" not in columns:
-            connection.execute(
-                """
-                ALTER TABLE articles
-                ADD COLUMN topics TEXT
-                """
-            )
+            "topics":
+                "ALTER TABLE articles ADD COLUMN topics TEXT",
 
-        if "processed_at" not in columns:
-            connection.execute(
+            "processed_at":
+                "ALTER TABLE articles ADD COLUMN processed_at TEXT",
+
+            "feed_excerpt":
+                "ALTER TABLE articles ADD COLUMN feed_excerpt TEXT",
+
+            "processing_attempts":
                 """
                 ALTER TABLE articles
-                ADD COLUMN processed_at TEXT
+                ADD COLUMN processing_attempts INTEGER NOT NULL DEFAULT 0
+                """,
+
+            "last_processing_error":
                 """
-            )
+                ALTER TABLE articles
+                ADD COLUMN last_processing_error TEXT
+                """,
+
+            "failed_at":
+                "ALTER TABLE articles ADD COLUMN failed_at TEXT",
+
+            "delivered_at":
+                "ALTER TABLE articles ADD COLUMN delivered_at TEXT",
+        }
+
+        for column, migration in migrations.items():
+            if column not in columns:
+                connection.execute(migration)
 
 
 def save_article(article: dict) -> bool:
-    try:
-        with get_connection() as connection:
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            INSERT OR IGNORE INTO articles (
+                source,
+                title,
+                url,
+                published_at,
+                feed_excerpt
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                article["source"],
+                article["title"],
+                article["url"],
+                article["published_at"],
+                article.get("feed_excerpt"),
+            ),
+        )
+
+        is_new = cursor.rowcount == 1
+
+        feed_excerpt = article.get("feed_excerpt")
+
+        if feed_excerpt:
             connection.execute(
                 """
-                INSERT INTO articles (
-                    source,
-                    title,
-                    url,
-                    published_at
-                )
-                VALUES (?, ?, ?, ?)
+                UPDATE articles
+                SET feed_excerpt = ?
+                WHERE url = ?
+                  AND (
+                    feed_excerpt IS NULL
+                    OR feed_excerpt = ''
+                  )
                 """,
                 (
-                    article["source"],
-                    article["title"],
+                    feed_excerpt,
                     article["url"],
-                    article["published_at"],
                 ),
             )
 
-        return True
-
-    except sqlite3.IntegrityError:
-        return False
+        return is_new
 
 
 def get_unprocessed_articles(limit: int = 10):
@@ -103,9 +140,12 @@ def get_unprocessed_articles(limit: int = 10):
                 id,
                 source,
                 title,
-                url
+                url,
+                feed_excerpt,
+                processing_attempts
             FROM articles
             WHERE processed_at IS NULL
+              AND failed_at IS NULL
             ORDER BY id ASC
             LIMIT ?
             """,
@@ -115,7 +155,10 @@ def get_unprocessed_articles(limit: int = 10):
     return rows
 
 
-def save_classification(article_id: int, result: dict):
+def save_classification(
+    article_id: int,
+    result: dict,
+):
     with get_connection() as connection:
         connection.execute(
             """
@@ -123,13 +166,169 @@ def save_classification(article_id: int, result: dict):
             SET relevance_score = ?,
                 why_interesting = ?,
                 topics = ?,
-                processed_at = CURRENT_TIMESTAMP
+                processed_at = CURRENT_TIMESTAMP,
+                last_processing_error = NULL,
+                failed_at = NULL
             WHERE id = ?
             """,
             (
                 result["relevance_score"],
                 result["why_interesting"],
-                json.dumps(result["topics"]),
+                json.dumps(
+                    result["topics"],
+                    ensure_ascii=False,
+                ),
                 article_id,
             ),
+        )
+
+
+def record_processing_error(
+    article_id: int,
+    error: str,
+    fail_after_attempts: int | None = None,
+):
+    error = error[:1000]
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            UPDATE articles
+            SET processing_attempts = processing_attempts + 1,
+                last_processing_error = ?
+            WHERE id = ?
+            """,
+            (
+                error,
+                article_id,
+            ),
+        )
+
+        row = connection.execute(
+            """
+            SELECT
+                processing_attempts,
+                failed_at
+            FROM articles
+            WHERE id = ?
+            """,
+            (article_id,),
+        ).fetchone()
+
+        if (
+            fail_after_attempts is not None
+            and row["processing_attempts"] >= fail_after_attempts
+            and row["failed_at"] is None
+        ):
+            connection.execute(
+                """
+                UPDATE articles
+                SET failed_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (article_id,),
+            )
+
+            row = connection.execute(
+                """
+                SELECT
+                    processing_attempts,
+                    failed_at
+                FROM articles
+                WHERE id = ?
+                """,
+                (article_id,),
+            ).fetchone()
+
+        return row
+
+
+def get_digest_candidates(
+    lookback_hours: int,
+    minimum_score: int,
+    maximum_articles: int,
+):
+    time_modifier = f"-{lookback_hours} hours"
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                id,
+                source,
+                title,
+                url,
+                relevance_score,
+                why_interesting,
+                topics,
+                discovered_at,
+                processed_at,
+                delivered_at
+            FROM articles
+            WHERE processed_at IS NOT NULL
+              AND failed_at IS NULL
+              AND delivered_at IS NULL
+              AND relevance_score >= ?
+              AND discovered_at >= datetime('now', ?)
+            ORDER BY
+                relevance_score DESC,
+                discovered_at DESC
+            LIMIT ?
+            """,
+            (
+                minimum_score,
+                time_modifier,
+                maximum_articles,
+            ),
+        ).fetchall()
+
+    articles = []
+
+    for row in rows:
+        topics = []
+
+        if row["topics"]:
+            try:
+                topics = json.loads(row["topics"])
+            except json.JSONDecodeError:
+                topics = []
+
+        articles.append(
+            {
+                "id": row["id"],
+                "source": row["source"],
+                "title": row["title"],
+                "url": row["url"],
+                "relevance_score": row["relevance_score"],
+                "why_interesting": row["why_interesting"],
+                "topics": topics,
+                "discovered_at": row["discovered_at"],
+                "processed_at": row["processed_at"],
+                "delivered_at": row["delivered_at"],
+            }
+        )
+
+    return articles
+
+
+def mark_articles_delivered(
+    article_ids: list[int],
+):
+    if not article_ids:
+        return
+
+    placeholders = ",".join(
+        "?"
+        for _ in article_ids
+    )
+
+    with get_connection() as connection:
+        connection.execute(
+            f"""
+            UPDATE articles
+            SET delivered_at = CURRENT_TIMESTAMP
+            WHERE id IN ({placeholders})
+              AND delivered_at IS NULL
+            """,
+            article_ids,
         )

@@ -1,0 +1,6 @@
+lookback_hours: 24
+minimum_score: 60
+maximum_articles: 8
+
+show_score: false
+show_topics: false
