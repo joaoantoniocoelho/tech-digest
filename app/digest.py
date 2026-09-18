@@ -16,6 +16,17 @@ def load_digest_config() -> dict:
         return yaml.safe_load(file)
 
 
+def get_processing_lookback_hours() -> int:
+    config = load_digest_config()
+
+    return int(
+        config.get(
+            "processing_lookback_hours",
+            24,
+        )
+    )
+
+
 def build_digest() -> dict:
     init_db()
 

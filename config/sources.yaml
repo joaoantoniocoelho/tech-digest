@@ -1,6 +1,44 @@
 sources:
+  # Discovery / aggregators
+
   - name: Hacker News
     url: https://news.ycombinator.com/rss
 
-  - name: Simon Willison
-    url: https://simonwillison.net/atom/everything/
+  - name: Lobsters
+    url: https://lobste.rs/rss
+
+
+  # Software engineering / industry
+
+  - name: Sean Goedecke
+    url: https://www.seangoedecke.com/rss.xml
+
+  - name: The Pragmatic Engineer
+    url: https://newsletter.pragmaticengineer.com/feed
+
+
+  # AI / AI engineering
+
+  - name: Latent Space
+    url: https://www.latent.space/feed
+
+  - name: Interconnects
+    url: https://www.interconnects.ai/feed
+
+  - name: Simon Willison's Newsletter
+    url: https://simonw.substack.com/feed
+
+
+  # Technology news / startups
+
+  - name: The Verge
+    url: https://www.theverge.com/rss/index.xml
+
+  - name: TechCrunch
+    url: https://techcrunch.com/feed/
+
+
+  # Technology business / strategy
+
+  - name: Stratechery
+    url: https://stratechery.com/feed/

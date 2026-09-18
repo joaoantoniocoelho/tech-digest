@@ -1,5 +1,11 @@
 import json
 import sqlite3
+from datetime import (
+    datetime,
+    timedelta,
+    timezone,
+)
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 
@@ -7,10 +13,18 @@ DB_PATH = Path("data/digest.db")
 
 
 def get_connection():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    DB_PATH.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
-    connection = sqlite3.connect(DB_PATH)
-    connection.row_factory = sqlite3.Row
+    connection = sqlite3.connect(
+        DB_PATH
+    )
+
+    connection.row_factory = (
+        sqlite3.Row
+    )
 
     return connection
 
@@ -83,7 +97,9 @@ def init_db():
 
         for column, migration in migrations.items():
             if column not in columns:
-                connection.execute(migration)
+                connection.execute(
+                    migration
+                )
 
 
 def save_article(article: dict) -> bool:
@@ -104,13 +120,17 @@ def save_article(article: dict) -> bool:
                 article["title"],
                 article["url"],
                 article["published_at"],
-                article.get("feed_excerpt"),
+                article.get(
+                    "feed_excerpt"
+                ),
             ),
         )
 
         is_new = cursor.rowcount == 1
 
-        feed_excerpt = article.get("feed_excerpt")
+        feed_excerpt = article.get(
+            "feed_excerpt"
+        )
 
         if feed_excerpt:
             connection.execute(
@@ -132,7 +152,80 @@ def save_article(article: dict) -> bool:
         return is_new
 
 
-def get_unprocessed_articles(limit: int = 10):
+def _parse_article_datetime(
+    value: str | None,
+):
+    if not value:
+        return None
+
+    value = value.strip()
+
+    try:
+        parsed = datetime.fromisoformat(
+            value.replace(
+                "Z",
+                "+00:00",
+            )
+        )
+
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(
+                tzinfo=timezone.utc
+            )
+
+        return parsed.astimezone(
+            timezone.utc
+        )
+
+    except ValueError:
+        pass
+
+    try:
+        parsed = parsedate_to_datetime(
+            value
+        )
+
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(
+                tzinfo=timezone.utc
+            )
+
+        return parsed.astimezone(
+            timezone.utc
+        )
+
+    except (
+        TypeError,
+        ValueError,
+        OverflowError,
+    ):
+        return None
+
+
+def article_datetime(
+    published_at: str | None,
+    discovered_at: str | None,
+):
+    return (
+        _parse_article_datetime(
+            published_at
+        )
+        or _parse_article_datetime(
+            discovered_at
+        )
+    )
+
+
+def get_articles_for_daily_processing(
+    lookback_hours: int,
+):
+    cutoff = (
+        datetime.now(timezone.utc)
+        - timedelta(
+            hours=lookback_hours
+        )
+    )
+
     with get_connection() as connection:
         rows = connection.execute(
             """
@@ -141,18 +234,71 @@ def get_unprocessed_articles(limit: int = 10):
                 source,
                 title,
                 url,
+                published_at,
+                discovered_at,
                 feed_excerpt,
                 processing_attempts
             FROM articles
             WHERE processed_at IS NULL
               AND failed_at IS NULL
-            ORDER BY id ASC
-            LIMIT ?
-            """,
-            (limit,),
+            """
         ).fetchall()
 
-    return rows
+    articles = []
+
+    for row in rows:
+        attempts = row[
+            "processing_attempts"
+        ]
+        published_time = article_datetime(
+            row["published_at"],
+            row["discovered_at"],
+        )
+
+        in_window = (
+            published_time is not None
+            and published_time >= cutoff
+        )
+        in_flight_retry = attempts > 0
+
+        if not in_window and not in_flight_retry:
+            continue
+
+        articles.append(
+            {
+                "id": row["id"],
+                "source": row["source"],
+                "title": row["title"],
+                "url": row["url"],
+                "published_at": row[
+                    "published_at"
+                ],
+                "discovered_at": row[
+                    "discovered_at"
+                ],
+                "feed_excerpt": row[
+                    "feed_excerpt"
+                ],
+                "processing_attempts": (
+                    attempts
+                ),
+                "article_datetime": (
+                    published_time
+                ),
+            }
+        )
+
+    articles.sort(
+        key=lambda article: (
+            article["article_datetime"]
+            or datetime.min.replace(
+                tzinfo=timezone.utc
+            ),
+            article["id"],
+        )
+    )
+
+    return articles
 
 
 def save_classification(
@@ -172,8 +318,12 @@ def save_classification(
             WHERE id = ?
             """,
             (
-                result["relevance_score"],
-                result["why_interesting"],
+                result[
+                    "relevance_score"
+                ],
+                result[
+                    "why_interesting"
+                ],
                 json.dumps(
                     result["topics"],
                     ensure_ascii=False,
@@ -216,9 +366,14 @@ def record_processing_error(
         ).fetchone()
 
         if (
-            fail_after_attempts is not None
-            and row["processing_attempts"] >= fail_after_attempts
-            and row["failed_at"] is None
+            fail_after_attempts
+            is not None
+            and row[
+                "processing_attempts"
+            ]
+            >= fail_after_attempts
+            and row["failed_at"]
+            is None
         ):
             connection.execute(
                 """
@@ -248,7 +403,12 @@ def get_digest_candidates(
     minimum_score: int,
     maximum_articles: int,
 ):
-    time_modifier = f"-{lookback_hours} hours"
+    cutoff = (
+        datetime.now(timezone.utc)
+        - timedelta(
+            hours=lookback_hours
+        )
+    )
 
     with get_connection() as connection:
         rows = connection.execute(
@@ -258,6 +418,7 @@ def get_digest_candidates(
                 source,
                 title,
                 url,
+                published_at,
                 relevance_score,
                 why_interesting,
                 topics,
@@ -269,27 +430,36 @@ def get_digest_candidates(
               AND failed_at IS NULL
               AND delivered_at IS NULL
               AND relevance_score >= ?
-              AND discovered_at >= datetime('now', ?)
             ORDER BY
                 relevance_score DESC,
                 discovered_at DESC
-            LIMIT ?
             """,
             (
                 minimum_score,
-                time_modifier,
-                maximum_articles,
             ),
         ).fetchall()
 
     articles = []
 
     for row in rows:
+        candidate_datetime = article_datetime(
+            row["published_at"],
+            row["discovered_at"],
+        )
+
+        if (
+            candidate_datetime is None
+            or candidate_datetime < cutoff
+        ):
+            continue
+
         topics = []
 
         if row["topics"]:
             try:
-                topics = json.loads(row["topics"])
+                topics = json.loads(
+                    row["topics"]
+                )
             except json.JSONDecodeError:
                 topics = []
 
@@ -299,14 +469,43 @@ def get_digest_candidates(
                 "source": row["source"],
                 "title": row["title"],
                 "url": row["url"],
-                "relevance_score": row["relevance_score"],
-                "why_interesting": row["why_interesting"],
+                "published_at": (
+                    row["published_at"]
+                ),
+                "relevance_score": (
+                    row[
+                        "relevance_score"
+                    ]
+                ),
+                "why_interesting": (
+                    row[
+                        "why_interesting"
+                    ]
+                ),
                 "topics": topics,
-                "discovered_at": row["discovered_at"],
-                "processed_at": row["processed_at"],
-                "delivered_at": row["delivered_at"],
+                "discovered_at": (
+                    row[
+                        "discovered_at"
+                    ]
+                ),
+                "processed_at": (
+                    row[
+                        "processed_at"
+                    ]
+                ),
+                "delivered_at": (
+                    row[
+                        "delivered_at"
+                    ]
+                ),
             }
         )
+
+        if (
+            len(articles)
+            >= maximum_articles
+        ):
+            break
 
     return articles
 

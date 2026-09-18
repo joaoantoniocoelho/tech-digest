@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The core ingestion and ranking pipeline is functional.
+The daily newspaper pipeline is functional.
 
 Implemented:
 
@@ -10,142 +10,27 @@ Implemented:
 - SQLite persistence
 - deduplication
 - Docker execution
-- cron scheduling
+- periodic collection without classification
+- daily sequential classification of all recent articles
 - HTTP article fetching
-- content extraction
+- content extraction with RSS excerpt fallback
 - local Ollama classification
 - structured feature extraction
+- one retry for invalid structured model output
 - deterministic relevance scoring
+- ranked digest over a publication-time window
+- Telegram delivery after successful send
 
-## Next: Automatic Processing
+## Next: Daily Use and Calibration
 
-Currently:
+The next work is operational rather than architectural:
 
-```text
-cron
-  |
-  v
-collect feeds
-```
+- watch a few days of real digests;
+- tune feature weights and the relevance threshold;
+- add or remove sources based on actual usefulness;
+- notice repeated stories across publications.
 
-Target:
-
-```text
-cron
-  |
-  v
-collect feeds
-  |
-  v
-process new articles
-  |
-  v
-save relevance results
-```
-
-The application container should continue to behave as a short-lived job.
-
-## Extraction Failure Handling
-
-Add retry tracking such as:
-
-```text
-processing_attempts
-last_processing_error
-failed_at
-```
-
-Possible fallback:
-
-```text
-article page
-     |
-     | extraction failed
-     v
-RSS summary/content
-     |
-     v
-classifier
-```
-
-Articles should not remain in an infinite retry loop.
-
-## Digest Builder
-
-Create a component that selects articles over a time window.
-
-Initial idea:
-
-```text
-articles from last 24 hours
-        |
-        v
-minimum relevance threshold
-        |
-        v
-sort by score
-        |
-        v
-top articles
-```
-
-The system should not force a fixed number of recommendations.
-
-If only three articles are genuinely good, the digest should contain three.
-
-Example output:
-
-```text
-Tech Digest
-
-1. Article title
-
-Why it's interesting:
-...
-
-Source: ...
-Read: https://...
-```
-
-## Telegram Delivery
-
-Initial Telegram integration should be intentionally simple.
-
-Version 1:
-
-```text
-generate digest
-      |
-      v
-Telegram Bot API
-      |
-      v
-private message
-```
-
-No commands, buttons, or interactive features are required initially.
-
-Possible future features:
-
-- `/digest`
-- `/latest`
-- topic filters
-- positive/negative feedback
-- read-later actions
-
-## Email Delivery
-
-Email can later use the same ranked article data.
-
-```text
-ranked digest data
-       |
-       +---- Telegram renderer
-       |
-       +---- HTML email renderer
-```
-
-The classification pipeline should remain independent of presentation.
+Keep the system a short-lived cron job on SQLite.
 
 ## Public Newsletter
 
@@ -183,10 +68,12 @@ For now, Tech Digest does not need:
 
 - Kubernetes;
 - Redis;
+- Celery;
 - PostgreSQL;
 - distributed queues;
 - vector databases;
 - a web frontend;
-- external commercial LLM APIs.
+- external commercial LLM APIs;
+- parallel LLM inference.
 
 The project should remain simple until actual usage creates a reason for additional infrastructure.

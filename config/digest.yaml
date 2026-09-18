@@ -1,3 +1,14 @@
+# Classification lookback. 28 hours covers the 24-hour newspaper
+# window plus the 4-hour RSS collection cadence, so articles
+# published after the last collection before processing are still
+# classified the next morning. In-flight retries (articles that
+# already have processing_attempts > 0) remain eligible even
+# outside this window until they succeed or hit the attempt limit.
+processing_lookback_hours: 28
+
+# Digest selection window, based on published_at with
+# discovered_at as fallback. Keep this near 24 hours so the
+# digest stays a daily newspaper rather than a historical archive.
 lookback_hours: 24
 minimum_score: 60
 maximum_articles: 8

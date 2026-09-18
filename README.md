@@ -14,12 +14,13 @@ The goal is to answer a much simpler question:
 
 Tech Digest is designed to:
 
-- collect technology articles automatically;
+- collect technology articles automatically during the day;
+- classify every recent article once per day;
 - avoid showing the same article twice;
 - extract article content only temporarily;
 - analyze articles locally using Ollama;
 - rank articles based on a personal interest profile;
-- eventually deliver a small daily digest through Telegram and/or email.
+- deliver a small daily digest through Telegram.
 
 The final digest is intentionally lightweight.
 
@@ -76,12 +77,14 @@ This makes ranking easier to inspect and tune.
 ```text
 RSS / Atom
     |
+    |  every 4 hours
     v
 Feed Collector
     |
     v
-SQLite
+SQLite metadata
     |
+    |  once per day
     v
 Article URL
     |
@@ -105,7 +108,20 @@ Python Scoring
     |
     v
 SQLite
+    |
+    |  once per day
+    v
+Ranked digest
+    |
+    v
+Telegram
 ```
+
+Collection and classification are separate jobs.
+
+The collector only stores article metadata. It does not call Ollama.
+
+Once per day, the processor classifies every unprocessed article in the recent publication window, sequentially.
 
 The extracted article text exists only during processing and is discarded afterward.
 
@@ -115,13 +131,16 @@ The extracted article text exists only during processing and is discarded afterw
 - YAML-based source configuration
 - SQLite persistence
 - URL-based deduplication
-- Dockerized collector
+- Dockerized collector and daily jobs
 - Scheduled collection through cron
+- Daily classification of all recent articles
 - Article extraction using HTTPX and Trafilatura
 - Local classification using Ollama
 - Structured model output using JSON Schema
 - Deterministic relevance scoring
 - Personalized interest profile
+- Daily ranked digest
+- Telegram delivery
 - Processing logs
 
 ## Project Structure
@@ -131,19 +150,26 @@ tech-digest/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py
+│   ├── process_daily.py
 │   ├── rss.py
 │   ├── db.py
 │   ├── content.py
 │   ├── classifier.py
 │   ├── processor.py
-│   └── scoring.py
+│   ├── scoring.py
+│   ├── digest.py
+│   ├── send_digest.py
+│   └── telegram.py
 │
 ├── config/
 │   ├── sources.yaml
-│   └── interests.yaml
+│   ├── interests.yaml
+│   └── digest.yaml
 │
 ├── data/
 │   └── digest.db
+│
+├── tests/
 │
 ├── logs/
 │
@@ -159,7 +185,25 @@ tech-digest/
 └── README.md
 ```
 
-## Running the Collector
+## Daily Lifecycle
+
+```text
+periodic lightweight collection
+        ↓
+SQLite metadata
+        ↓
+daily classification of all recent articles
+        ↓
+daily ranked digest
+        ↓
+Telegram
+```
+
+The daily processor selects articles by publication time (`published_at`), falling back to `discovered_at` only when no usable publication timestamp exists.
+
+That keeps a first import of an RSS source from treating old feed entries as today's news.
+
+## Running Locally
 
 Create and activate a virtual environment:
 
@@ -174,10 +218,28 @@ Install dependencies:
 python -m pip install -r requirements.txt
 ```
 
-Run the feed collector:
+Collect feeds without classifying anything:
 
 ```bash
 python -m app.main
+```
+
+Classify every eligible article from the daily window:
+
+```bash
+python -m app.process_daily
+```
+
+Preview the digest:
+
+```bash
+python -m app.digest
+```
+
+Send the digest through Telegram:
+
+```bash
+python -m app.send_digest
 ```
 
 ## Running with Docker
@@ -188,33 +250,26 @@ Build:
 docker compose build
 ```
 
-Run:
+Collect feeds:
 
 ```bash
 docker compose run --rm digest
 ```
 
-The SQLite database is persisted outside the container through the `data/` directory.
-
-## Article Processing
-
-Articles can currently be processed manually with:
+Classify the daily window:
 
 ```bash
-python -c "from app.processor import process_articles; process_articles()"
+docker compose run --rm digest python -m app.process_daily
 ```
 
-The processor:
+Preview or send the digest:
 
-1. selects unprocessed articles;
-2. downloads the page;
-3. extracts readable content;
-4. sends the temporary text to the local Ollama model;
-5. obtains a structured feature vector;
-6. calculates a deterministic relevance score;
-7. stores only the derived result.
+```bash
+docker compose run --rm digest python -m app.digest
+docker compose run --rm digest python -m app.send_digest
+```
 
-Automatic article processing is planned as the next stage.
+The SQLite database is persisted outside the container through the `data/` directory.
 
 ## Documentation
 
@@ -229,6 +284,4 @@ More details:
 
 Tech Digest is currently under active development.
 
-The collection and relevance-analysis pipeline is functional.
-
-The next major milestone is automatic processing of newly collected articles followed by digest generation and Telegram delivery.
+The daily newspaper pipeline is functional: periodic collection, daily local classification, ranked digest, and Telegram delivery.

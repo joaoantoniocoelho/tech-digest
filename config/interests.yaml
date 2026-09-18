@@ -51,8 +51,8 @@ features:
   leading_tech_company_major_development:
     description: >
       The article concerns a genuinely significant product, strategy,
-      platform, or technology development from a leading technology or
-      AI company. Routine company announcements do not qualify.
+      platform, organizational, or technology development from a leading
+      technology or AI company. Routine company announcements do not qualify.
     weight: 40
 
   apple_ecosystem:
@@ -73,7 +73,25 @@ features:
     description: >
       Startups, SaaS products, indie hacking, product building,
       monetization, distribution, or founder experiences are important topics.
+      A routine funding announcement alone is not enough to strongly qualify.
     weight: 30
+
+  technology_business_strategy:
+    description: >
+      The article substantially discusses business strategy in the technology
+      industry, including business models, pricing, distribution, competitive
+      positioning, platform strategy, ecosystems, moats, product strategy,
+      acquisitions, or how technology companies create and capture value.
+    weight: 42
+
+  technology_industry_market:
+    description: >
+      The article discusses meaningful changes in the technology industry's
+      competitive or economic landscape, including major acquisitions,
+      funding conditions, company performance, sector trends, market structure,
+      major strategic shifts, or changes affecting the broader technology
+      business. Routine daily stock-price movements do not qualify.
+    weight: 35
 
   software_industry_orgs:
     description: >
@@ -147,13 +165,15 @@ features:
   generic_consumer_tech:
     description: >
       The article is generic consumer technology news without meaningful
-      engineering, AI, security, software, or industry depth.
+      engineering, AI, security, software, business strategy, or industry depth.
     weight: -12
 
   routine_corporate:
     description: >
-      The article is primarily a routine corporate announcement,
-      personnel update, marketing announcement, or minor company news.
+      The article is primarily a routine corporate announcement, minor funding
+      round, executive appointment, marketing announcement, minor product update,
+      partnership announcement, or other company news without broader strategic,
+      technological, or industry significance.
     weight: -12
 
   crypto_web3:

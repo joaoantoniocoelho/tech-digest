@@ -4,20 +4,10 @@ from pathlib import Path
 import yaml
 
 from app.db import init_db, save_article
-from app.processor import process_articles
 from app.rss import fetch_feed
 
 
-def main():
-    started_at = datetime.now().astimezone()
-
-    print()
-    print("=" * 60)
-    print(f"Run started at: {started_at.isoformat(timespec='seconds')}")
-    print("=" * 60)
-
-    init_db()
-
+def collect_feeds() -> int:
     config_path = Path("config/sources.yaml")
 
     with config_path.open() as file:
@@ -52,12 +42,19 @@ def main():
     print()
     print(f"Collection complete: {total_new} new articles")
 
+    return total_new
+
+
+def main():
+    started_at = datetime.now().astimezone()
+
     print()
     print("=" * 60)
-    print("Processing articles")
+    print(f"Run started at: {started_at.isoformat(timespec='seconds')}")
     print("=" * 60)
 
-    process_articles()
+    init_db()
+    collect_feeds()
 
     finished_at = datetime.now().astimezone()
 
