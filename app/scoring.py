@@ -8,18 +8,20 @@ STRENGTH_MULTIPLIERS = {
 IMPORTANCE_ADJUSTMENTS = {
     0: -5,
     1: 0,
-    2: 7,
-    3: 12,
+    2: 5,
+    3: 8,
 }
 
 
 POSITIVE_MATCH_MULTIPLIERS = [
     1.0,
-    0.35,
-    0.20,
+    0.28,
     0.10,
-    0.10,
+    0.04,
+    0.02,
 ]
+
+EXTRA_MATCH_MULTIPLIER = 0.01
 
 
 def calculate_relevance_score(
@@ -50,7 +52,7 @@ def calculate_relevance_score(
         if index < len(POSITIVE_MATCH_MULTIPLIERS):
             multiplier = POSITIVE_MATCH_MULTIPLIERS[index]
         else:
-            multiplier = 0.05
+            multiplier = EXTRA_MATCH_MULTIPLIER
 
         score += contribution * multiplier
 

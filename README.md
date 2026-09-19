@@ -1,8 +1,8 @@
 # Tech Digest
 
-A self-hosted personal technology news filter powered by local AI.
+A self-hosted personal technology news filter with cloud-assisted classification.
 
-Tech Digest collects articles from RSS and Atom feeds, analyzes them locally using an Ollama model, and assigns a personalized relevance score based on my interests.
+Tech Digest collects articles from RSS and Atom feeds, sends article text to [TypeSafe Jev](https://typesafe.ai) for structured classification, and assigns a personalized relevance score based on my interests.
 
 The goal is not to summarize the internet.
 
@@ -18,7 +18,7 @@ Tech Digest is designed to:
 - classify every recent article once per day;
 - avoid showing the same article twice;
 - extract article content only temporarily;
-- analyze articles locally using Ollama;
+- classify articles with TypeSafe Jev (typed Score decisions);
 - rank articles based on a personal interest profile;
 - deliver a small daily digest through Telegram.
 
@@ -29,7 +29,7 @@ Each recommended article should contain roughly:
 ```text
 Article title
 
-Why it may be worth reading.
+Why: AI agents · Developer tools · AI research
 
 Source
 Link
@@ -39,11 +39,13 @@ The original article remains the destination.
 
 ## Principles
 
-### Local-first
+### Self-hosted pipeline, cloud classifier
 
-Article analysis runs on my home server using Ollama.
+Collection, storage, scoring, and delivery run on my home server.
 
-No external LLM API is required.
+Article text is sent to the TypeSafe API for classification only. Full article content is not persisted in the local SQLite database. This project does not make claims about TypeSafe's own retention.
+
+Telegram delivery uses the public Telegram Bot API.
 
 ### Do not republish articles
 
@@ -53,7 +55,7 @@ The persisted output contains metadata and derived information such as:
 
 - relevance score;
 - topics;
-- why the article may be interesting.
+- why the article may be interesting (compact feature labels).
 
 ### Filter, do not summarize
 
@@ -63,11 +65,11 @@ It should help reduce information overload instead of creating another large bod
 
 ### Explainable ranking
 
-The language model does not directly choose the final relevance score.
+The classifier does not directly choose the final relevance score.
 
 Instead:
 
-1. the model extracts a feature vector describing the article;
+1. Jev assigns a feature strength and importance score for the article;
 2. deterministic Python code converts those features into a relevance score.
 
 This makes ranking easier to inspect and tune.
@@ -98,7 +100,7 @@ Trafilatura
 Temporary article text
     |
     v
-Ollama / Qwen
+TypeSafe Jev (system_one)
     |
     v
 Feature Vector
@@ -119,11 +121,21 @@ Telegram
 
 Collection and classification are separate jobs.
 
-The collector only stores article metadata. It does not call Ollama.
+The collector only stores article metadata. It does not call the classifier.
 
 Once per day, the processor classifies every unprocessed article in the recent publication window, sequentially.
 
 The extracted article text exists only during processing and is discarded afterward.
+
+## Configuration
+
+Set these in `.env` (see [Operations](docs/operations.md)):
+
+- `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` for delivery;
+- `TYPESAFE_API_KEY` (required for classification);
+- optional `TYPESAFE_MODEL` (default `jev-1.13.0`).
+
+Docker Compose loads `.env` automatically. A local Python shell does not, so export the same variables before `process_daily` or `debug_classification`.
 
 ## Current Features
 
@@ -135,8 +147,8 @@ The extracted article text exists only during processing and is discarded afterw
 - Scheduled collection through cron
 - Daily classification of all recent articles
 - Article extraction using HTTPX and Trafilatura
-- Local classification using Ollama
-- Structured model output using JSON Schema
+- TypeSafe Jev classification (typed Score outputs)
+- Debug classification without writing to SQLite
 - Deterministic relevance scoring
 - Personalized interest profile
 - Daily ranked digest
@@ -155,6 +167,7 @@ tech-digest/
 │   ├── db.py
 │   ├── content.py
 │   ├── classifier.py
+│   ├── debug_classification.py
 │   ├── processor.py
 │   ├── scoring.py
 │   ├── digest.py
@@ -218,6 +231,12 @@ Install dependencies:
 python -m pip install -r requirements.txt
 ```
 
+Classification talks to the TypeSafe API (`typesafe-sdk`). Export `TYPESAFE_API_KEY` first, for example:
+
+```bash
+set -a && source .env && set +a
+```
+
 Collect feeds without classifying anything:
 
 ```bash
@@ -234,6 +253,13 @@ Preview the digest:
 
 ```bash
 python -m app.digest
+```
+
+Debug one article without saving classification:
+
+```bash
+python -m app.debug_classification --url "https://example.com/article"
+python -m app.debug_classification --article-id 123
 ```
 
 Send the digest through Telegram:
@@ -271,6 +297,8 @@ docker compose run --rm digest python -m app.send_digest
 
 The SQLite database is persisted outside the container through the `data/` directory.
 
+Compose reads `.env` and does not use host networking. Classification needs outbound HTTPS to `api.typesafe.ai`; there is no local Ollama sidecar.
+
 ## Documentation
 
 More details:
@@ -284,4 +312,4 @@ More details:
 
 Tech Digest is currently under active development.
 
-The daily newspaper pipeline is functional: periodic collection, daily local classification, ranked digest, and Telegram delivery.
+The daily newspaper pipeline is functional: periodic collection, daily classification, ranked digest, and Telegram delivery.

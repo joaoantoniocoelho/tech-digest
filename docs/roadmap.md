@@ -9,16 +9,18 @@ Implemented:
 - RSS/Atom discovery
 - SQLite persistence
 - deduplication
-- Docker execution
+- Docker execution without a local LLM sidecar
 - periodic collection without classification
 - daily sequential classification of all recent articles
 - HTTP article fetching
 - content extraction with RSS excerpt fallback
-- local Ollama classification
-- structured feature extraction
-- one retry for invalid structured model output
+- TypeSafe Jev classification (`typesafe-sdk`, model pin `jev-1.13.0`)
+- conservative per-feature Score questions
+- Python discretization of continuous Jev scores
+- structured Why of at most 3 positive feature labels
+- debug classification CLI
 - deterministic relevance scoring
-- ranked digest over a publication-time window
+- ranked digest over a publication-time window (score threshold + article cap)
 - Telegram delivery after successful send
 
 ## Next: Daily Use and Calibration
@@ -26,11 +28,12 @@ Implemented:
 The next work is operational rather than architectural:
 
 - watch a few days of real digests;
-- tune feature weights and the relevance threshold;
+- inspect raw vs discrete Jev scores with `python -m app.debug_classification`;
+- tune feature weights, include/exclude rules, and the relevance threshold;
 - add or remove sources based on actual usefulness;
 - notice repeated stories across publications.
 
-Keep the system a short-lived cron job on SQLite.
+Keep the system a short-lived cron job on SQLite. Classification remains a sequential TypeSafe API call per article.
 
 ## Public Newsletter
 
@@ -73,7 +76,6 @@ For now, Tech Digest does not need:
 - distributed queues;
 - vector databases;
 - a web frontend;
-- external commercial LLM APIs;
-- parallel LLM inference.
+- parallel classifier inference across articles.
 
 The project should remain simple until actual usage creates a reason for additional infrastructure.

@@ -20,7 +20,7 @@ few links worth opening
 
 It behaves like a daily personal newspaper.
 
-Collection is cheap and runs throughout the day. Classification is expensive and runs once per day, before the digest is sent.
+Collection is cheap and runs throughout the day. Classification calls TypeSafe Jev once per article, so it runs once per day before the digest is sent.
 
 ## High-Level Flow
 
@@ -43,7 +43,7 @@ Content Extractor
    |
    | temporary text
    v
-Local LLM
+TypeSafe Jev
    |
    v
 Feature Vector
@@ -167,17 +167,33 @@ Implemented in:
 app/classifier.py
 ```
 
-The classifier talks to a local Ollama instance.
+The classifier uses the official `typesafe-sdk` client and one `system_one` call per article.
 
-The current model is:
+Each interest feature in `config/interests.yaml` becomes a typed `Score` question (levels 0–2). A separate `importance` score uses levels 0–3.
+
+Every feature question includes the feature description, include/exclude rules, the 0/1/2 rubric, and a conservative default-to-0 instruction.
+
+Jev returns continuous scores. Python discretizes them with explicit thresholds, not `round()`:
 
 ```text
-qwen3.5:9b
+feature strength:  < 0.75 → 0,  < 1.50 → 1,  otherwise 2
+importance:        < 0.50 → 0,  < 1.50 → 1,  < 2.50 → 2,  otherwise 3
+```
+
+The model name defaults to `jev-1.13.0` and can be overridden with `TYPESAFE_MODEL`. Authentication uses `TYPESAFE_API_KEY`.
+
+State sent to Jev contains only:
+
+```json
+{
+  "title": "...",
+  "content": "..."
+}
 ```
 
 The classifier does not produce the final relevance score.
 
-Instead, it extracts factual features from the article.
+Instead, it extracts factual feature strengths and importance. Python builds `why_interesting` from at most three **positive** features, ordered by contribution to the score, joined with ` · `. Negative features never appear in Why or topics.
 
 Example:
 
@@ -189,25 +205,27 @@ Example:
     "apple_ecosystem": 0
   },
   "importance": 2,
-  "why_interesting": "A major model release focused on structured automation.",
-  "topics": [
-    "AI Models",
-    "Agents"
-  ]
+  "why_interesting": "AI models · AI agents",
+  "topics": ["AI models", "AI agents"]
 }
 ```
 
 Feature strength values mean:
 
 ```text
-0 = does not meaningfully apply
-1 = related or secondary
-2 = directly relevant
+0 = does not meaningfully apply (default)
+1 = explicitly present, but secondary
+2 = central to the article
 ```
 
-Structured output is enforced through a JSON Schema sent to Ollama.
+Inspect a single article without writing to SQLite:
 
-If the model returns malformed or invalid structured output, classification is retried once before the attempt is treated as a processing failure.
+```text
+python -m app.debug_classification --url "https://..."
+python -m app.debug_classification --article-id 123
+```
+
+If the TypeSafe API fails, the processor retry logic records the error and may retry on a later daily run. The API key must never appear in logs.
 
 ## Relevance Scoring
 
@@ -222,7 +240,7 @@ The final score is calculated in Python.
 This separation is intentional:
 
 ```text
-LLM:
+Jev:
 What is this article about?
 
 Python:
@@ -271,7 +289,7 @@ calculate score
 save derived data
 ```
 
-Qwen calls remain sequential. The processor does not run inference in parallel.
+TypeSafe API calls remain sequential. The processor does not run inference in parallel.
 
 Articles that cannot be extracted or classified increment `processing_attempts`. After the maximum number of attempts they are marked with `failed_at` so they do not block the pipeline forever.
 
@@ -289,9 +307,12 @@ app/telegram.py
 
 The digest selects recent classified articles that:
 
-- fall inside the digest lookback window;
-- meet the relevance threshold;
+- fall inside the digest lookback window (`lookback_hours: 24`);
+- meet the relevance threshold (`minimum_score: 60`);
+- stay under the article cap (`maximum_articles: 8`);
 - have not already been delivered.
+
+Each item is a compact Why line of at most three positive feature labels. Scores and topic lists are hidden in the Telegram message by default (`show_score` / `show_topics` in `config/digest.yaml`).
 
 Articles are marked delivered only after a successful Telegram send.
 
@@ -309,7 +330,9 @@ Persistent data stays on the host:
 ./data:/app/data
 ```
 
-The Ollama service runs separately on the home server.
+Compose loads `.env` (`TYPESAFE_API_KEY`, optional `TYPESAFE_MODEL`) and uses normal Docker networking. It does not use `network_mode: host` and does not talk to a local Ollama instance.
+
+Classification requires outbound HTTPS to `api.typesafe.ai`. Processor logs redact `TYPESAFE_API_KEY` if it appears in an error.
 
 ## Scheduling
 
@@ -328,6 +351,6 @@ Recommended cadence:
 0 7 * * * cd /home/joaoac/tech-digest && /usr/bin/docker compose run --rm digest python -m app.send_digest >> logs/digest.log 2>&1
 ```
 
-Collection does not wake Ollama.
+Collection does not call the classifier.
 
 Classification and digest delivery are separate jobs so a slow classification run cannot block feed collection.

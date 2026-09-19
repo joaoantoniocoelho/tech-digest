@@ -3,3 +3,4 @@ PyYAML
 trafilatura
 httpx
 zstandard
+typesafe-sdk==0.7.0

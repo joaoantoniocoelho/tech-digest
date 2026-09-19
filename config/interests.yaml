@@ -1,197 +1,431 @@
 features:
   major_ai_model_development:
+    label: AI models
+    weight: 55
     description: >
       The article is mainly about a major new AI or large language model,
       a significant capability jump, or a broadly important model release.
-      Ordinary use of an existing model does not qualify.
-    weight: 55
+    include_when: >
+      A new or substantially updated model is the subject; there is a
+      meaningful capability jump, architecture change, or important release.
+    exclude_when: >
+      Ordinary use of an existing model, a product that merely includes AI,
+      a chatbot, a demo, or an AI-powered feature in an otherwise ordinary
+      product. A model mention is not a major AI model development.
 
   ai_agents:
+    label: AI agents
+    weight: 50
     description: >
       AI agents or agentic systems that plan, use tools, take actions,
       or autonomously complete multi-step tasks are an important subject.
-      Ordinary AI inference or automation does not qualify.
-    weight: 50
+    include_when: >
+      Agents, autonomy, tool use, computer-use agents, or multi-step
+      agentic behavior are an explicit and material part of the article.
+    exclude_when: >
+      There is an LLM, text generation, machine learning, a chatbot,
+      ordinary inference, or software that happens to use AI. Using ML
+      does not mean AI agents.
 
   ai_assisted_software_engineering:
-    description: >
-      AI is materially used for writing, reviewing, debugging, designing,
-      reverse-engineering, or otherwise building software, or the article
-      directly discusses AI-assisted software development workflows.
+    label: AI-assisted engineering
     weight: 50
+    description: >
+      AI is materially used to write, review, debug, test, design,
+      reverse-engineer, or otherwise build software, or the article
+      directly discusses AI-assisted software development workflows.
+    include_when: >
+      AI is actually used in the software engineering loop: coding,
+      review, debugging, testing, development workflows, or building
+      software with AI assistance as a subject.
+    exclude_when: >
+      The article is about AI and also mentions software, without AI
+      being used to engineer software. A model, agent, or AI product
+      is not automatically AI-assisted software engineering.
 
   developer_tools:
+    label: Developer tools
+    weight: 45
     description: >
       The article is substantially about tools, products, platforms,
       or workflows specifically intended for software developers.
-    weight: 45
+    include_when: >
+      The tool or workflow is meant for developers, or is a material
+      part of a software development workflow.
+    exclude_when: >
+      Any technical software, a GitHub repository, open source in
+      general, or a product that developers might happen to use.
+      Open-source software does not automatically mean developer tooling.
+      An AI model release, research result, or news roundup is not a
+      developer tool unless the article is actually about a tool for
+      developers.
 
   software_engineering_practices:
-    description: >
-      The article substantially discusses software architecture, engineering
-      trade-offs, reliability, testing, maintainability, system design,
-      incidents, technical decision-making, or how software is engineered.
-      Mere implementation detail is not enough.
+    label: Software engineering
     weight: 50
+    description: >
+      The article substantially discusses software architecture,
+      engineering trade-offs, reliability, testing, maintainability,
+      system design, incidents, technical decision-making, or how
+      software is engineered.
+    include_when: >
+      Practices, processes, design, maintenance, architecture, testing,
+      review, or other engineering work are a real subject of the article.
+    exclude_when: >
+      The article merely involves code, a programming language, a
+      project write-up, or implementation detail without discussing
+      how software is engineered. Technical complexity does not imply
+      software engineering. Hardware with some software is not
+      software engineering. AI model launches, agent product coverage,
+      or AI news roundups that mention software without discussing
+      architecture, testing, trade-offs, or engineering practice
+      must stay at 0.
 
   engineering_culture_teams:
+    label: Engineering culture
+    weight: 45
     description: >
       Engineering culture, software teams, organizational practices,
-      management, engineering processes, collaboration, or how engineering
-      organizations operate are important subjects.
-    weight: 45
+      management, engineering processes, collaboration, or how
+      engineering organizations operate are important subjects.
+    include_when: >
+      There is real content about organizations, teams, culture,
+      management, or engineering dynamics.
+    exclude_when: >
+      A company is mentioned, a product ships, or engineers are
+      implied. A technical article is not engineering culture.
 
   security:
-    description: >
-      Security is an important subject, including vulnerabilities,
-      authentication, cryptography, integrity, provenance, exploits,
-      malware, or software supply-chain security.
+    label: Security
     weight: 50
+    description: >
+      Security is a concrete subject: vulnerabilities, exploits,
+      attacks, defense, authentication, cryptography, supply chain,
+      malware, incident response, or security of agents/models.
+    include_when: >
+      Security, cryptographic integrity, authentication, provenance,
+      vulnerabilities, exploits, malware, or supply-chain security
+      are an explicit and material part of the article.
+    exclude_when: >
+      Imagined security implications, "this could be abused", or
+      adjacent topics such as AI, agents, or infrastructure without
+      security being an actual subject.
 
   leading_tech_company_major_development:
-    description: >
-      The article concerns a genuinely significant product, strategy,
-      platform, organizational, or technology development from a leading
-      technology or AI company. Routine company announcements do not qualify.
+    label: Big tech developments
     weight: 40
+    description: >
+      A genuinely significant product, strategy, platform,
+      organizational, or technology development from a leading
+      technology or AI company.
+    include_when: >
+      The development itself is material and important, not merely
+      that a famous company appears.
+    exclude_when: >
+      Routine announcements, minor product updates, ordinary launches,
+      or any article that mentions a well-known company. Famous
+      company is not enough.
 
   apple_ecosystem:
-    description: >
-      Apple products, platforms, Apple Silicon, operating systems,
-      developer technologies, platform internals, or other substantial
-      Apple ecosystem topics are important to the article.
+    label: Apple
     weight: 45
+    description: >
+      Apple products, platforms, Apple Silicon, macOS, iOS, iPadOS,
+      watchOS, Apple hardware, Apple platform internals, or Apple
+      developer technologies are important to the article.
+    include_when: >
+      Apple, its operating systems, Apple Silicon, APIs, platform
+      internals, or Apple developer tools are a material subject.
+    exclude_when: >
+      Software that happens to run on a Mac, has multiplatform
+      support, or mentions Apple in passing.
 
   practical_ai_research:
-    description: >
-      The article discusses AI research, model capabilities, training,
-      inference, benchmarks, architectures, or methods with meaningful
-      practical implications.
+    label: AI research
     weight: 35
+    description: >
+      AI research, model capabilities, training, inference,
+      benchmarks, architectures, or methods with meaningful
+      practical implications.
+    include_when: >
+      There is research, a benchmark, a technique, or an experimental
+      result with practical relevance.
+    exclude_when: >
+      Generic opinion about AI, product marketing, or a model
+      announcement without research/technical content.
 
   startups_saas_indie:
+    label: Startups & SaaS
+    weight: 30
     description: >
       Startups, SaaS products, indie hacking, product building,
-      monetization, distribution, or founder experiences are important topics.
-      A routine funding announcement alone is not enough to strongly qualify.
-    weight: 30
+      monetization, distribution, or founder experiences are
+      important topics.
+    include_when: >
+      The article is materially about building or operating a
+      startup, SaaS, indie hacking, business-relevant funding,
+      distribution, product, GTM, or operations.
+    exclude_when: >
+      The company happens to be a startup, a Show HN project exists,
+      or there is a routine funding mention without the article being
+      about the startup/SaaS/indie subject.
 
   technology_business_strategy:
-    description: >
-      The article substantially discusses business strategy in the technology
-      industry, including business models, pricing, distribution, competitive
-      positioning, platform strategy, ecosystems, moats, product strategy,
-      acquisitions, or how technology companies create and capture value.
+    label: Tech business strategy
     weight: 42
+    description: >
+      Business strategy in the technology industry: business models,
+      pricing, distribution, competitive positioning, platform
+      strategy, ecosystems, moats, product strategy, acquisitions,
+      or how technology companies create and capture value.
+    include_when: >
+      Distribution, pricing, platform strategy, acquisition,
+      positioning, business model, ecosystem, value capture, or
+      product strategy is part of the content.
+    exclude_when: >
+      A company or startup is involved, a product launched, or a
+      routine funding round, partnership, executive appointment,
+      or minor announcement occurred.
 
   technology_industry_market:
-    description: >
-      The article discusses meaningful changes in the technology industry's
-      competitive or economic landscape, including major acquisitions,
-      funding conditions, company performance, sector trends, market structure,
-      major strategic shifts, or changes affecting the broader technology
-      business. Routine daily stock-price movements do not qualify.
+    label: Tech industry market
     weight: 35
+    description: >
+      Meaningful changes in the technology industry's competitive
+      or economic landscape: major acquisitions, funding conditions,
+      sector trends, market structure, major strategic shifts, or
+      changes affecting the broader technology business.
+    include_when: >
+      Structural or competitive industry change is the subject.
+    exclude_when: >
+      Routine funding, daily stock movement, a small launch, a
+      trivial partnership, or ordinary company news. A single-company
+      announcement is not an industry-market development.
 
   software_industry_orgs:
-    description: >
-      The software industry, technology companies, engineering organizations,
-      or broader changes in how software companies operate are important topics.
+    label: Software industry
     weight: 30
+    description: >
+      The software industry, technology companies, engineering
+      organizations, or broader changes in how software companies
+      operate are important topics.
+    include_when: >
+      How software companies or the software industry operate is
+      a material subject.
+    exclude_when: >
+      A software company is mentioned or a product is discussed
+      without industry/organizational content.
 
   developer_careers_job_market:
-    description: >
-      Software engineering careers, hiring, compensation, job markets,
-      career progression, or the changing role of developers are important topics.
+    label: Developer careers
     weight: 30
+    description: >
+      Software engineering careers, hiring, compensation, job
+      markets, career progression, or the changing role of
+      developers are important topics.
+    include_when: >
+      Careers, hiring, compensation, or the developer job market
+      are a real subject.
+    exclude_when: >
+      A developer wrote the article, or AI/tools might affect jobs
+      in the abstract without career content.
 
   open_source:
-    description: >
-      Open-source software, open-source development, project governance,
-      or a meaningful open-source release is an important aspect.
+    label: Open source
     weight: 22
+    description: >
+      Open-source software, open-source development, project
+      governance, or a meaningful open-source release is an
+      important aspect.
+    include_when: >
+      Open source is a relevant part of the article or project:
+      licensing, community, governance, or a meaningful OSS release.
+    exclude_when: >
+      There is a GitHub repository, source is viewable, or code
+      is public without open source being a subject.
 
   programming_languages_frameworks:
+    label: Languages & frameworks
+    weight: 22
     description: >
       Programming languages, frameworks, runtimes, language design,
-      or substantial language ecosystem developments are important subjects.
-    weight: 22
+      compilers, or substantial language ecosystem developments
+      are important subjects.
+    include_when: >
+      A language, framework, runtime, compiler, or language
+      ecosystem is a material subject.
+    exclude_when: >
+      Code is shown in some language, or a tool is implemented
+      in a language, without the language/framework being the subject.
 
   databases_developer_infrastructure:
+    label: Developer infrastructure
+    weight: 30
     description: >
       Databases, developer infrastructure, deployment systems,
-      observability, cloud tooling, or infrastructure directly used
-      to build and operate software are important subjects.
-    weight: 30
+      observability, cloud tooling, or infrastructure used to
+      build and operate software.
+    include_when: >
+      Databases, storage, deployment, developer infrastructure,
+      runtime/platform, or similar infrastructure is material.
+    exclude_when: >
+      Software is deployed somewhere, or infrastructure is
+      mentioned in passing.
 
   self_hosting_local_ai:
-    description: >
-      Self-hosting, homelabs, running local services, local AI inference,
-      Ollama-like systems, or personally operated infrastructure are important.
+    label: Self-hosting & local AI
     weight: 35
+    description: >
+      Self-hosting, homelabs, running local services, local AI
+      inference, on-device execution, or personally operated
+      infrastructure are important.
+    include_when: >
+      Self-hosting, local execution, a home lab, a local model,
+      or on-device execution is a real part of the content.
+    exclude_when: >
+      Software could theoretically be run locally, or a model
+      exists, without local/self-hosted execution being the subject.
 
   privacy:
+    label: Privacy
+    weight: 30
     description: >
       User privacy, privacy-preserving technology, data protection,
-      tracking prevention, or privacy engineering are important subjects.
-    weight: 30
+      tracking prevention, or privacy engineering are important
+      subjects.
+    include_when: >
+      Privacy is a material subject of the article.
+    exclude_when: >
+      Privacy implications are imagined, or data is mentioned
+      without privacy being the subject.
 
   interesting_software_project:
-    description: >
-      The article presents an unusual, creative, or technically interesting
-      software project where the software itself is a meaningful part
-      of what makes the project interesting.
+    label: Interesting software
     weight: 25
+    description: >
+      An unusual, creative, or technically interesting software
+      project where the software itself is a meaningful part of
+      what makes the project interesting.
+    include_when: >
+      The project/software is itself technically interesting,
+      unusual, or creative as a subject.
+    exclude_when: >
+      Used as a catch-all for any software article. If more
+      specific features already describe the article, do not
+      activate this automatically.
 
   deep_infrastructure:
-    description: >
-      The article is primarily about highly specialized low-level infrastructure,
-      protocols, kernel internals, embedded systems, or similarly narrow
-      infrastructure topics with limited general applicability.
+    label: Deep infrastructure
     weight: -8
+    description: >
+      The article is primarily about highly specialized low-level
+      infrastructure, protocols, kernel internals, embedded systems,
+      or similarly narrow infrastructure topics with limited
+      general applicability.
+    include_when: >
+      Low-level, specialized infrastructure is the primary subject
+      and has limited general applicability.
+    exclude_when: >
+      Ordinary cloud, databases, or developer infrastructure
+      that is generally useful. Do not activate because a system
+      is "technical".
 
   theoretical_ai:
-    description: >
-      The article is primarily theoretical AI or mathematical research
-      without clear practical implications.
+    label: Theoretical AI
     weight: -10
+    description: >
+      The article is primarily theoretical AI or mathematical
+      research without clear practical implications.
+    include_when: >
+      The main subject is theoretical or mathematical AI without
+      practical bearing.
+    exclude_when: >
+      Practical AI research, model releases, or applied methods.
+      Do not activate merely because the article is technical.
 
   hardware_project:
-    description: >
-      The article is primarily a hardware, electronics, FPGA, maker,
-      or physical computing project where software is secondary.
+    label: Hardware projects
     weight: -8
+    description: >
+      The article is primarily a hardware, electronics, FPGA,
+      maker, or physical computing project where software is
+      secondary.
+    include_when: >
+      Hardware/electronics is the primary subject and software
+      is secondary.
+    exclude_when: >
+      Software that happens to run on hardware, or computers
+      in general. Hardware with some software is not automatically
+      this feature, and is not automatically software engineering.
 
   generic_consumer_tech:
-    description: >
-      The article is generic consumer technology news without meaningful
-      engineering, AI, security, software, business strategy, or industry depth.
+    label: Generic consumer tech
     weight: -12
+    description: >
+      Generic consumer technology news without meaningful
+      engineering, AI, security, software, business strategy,
+      or industry depth.
+    include_when: >
+      The article is shallow consumer-tech news as its main
+      character.
+    exclude_when: >
+      A product is used by consumers but the article has
+      engineering, AI, security, software, strategy, or industry
+      depth. Do not activate only because consumers use the product.
 
   routine_corporate:
-    description: >
-      The article is primarily a routine corporate announcement, minor funding
-      round, executive appointment, marketing announcement, minor product update,
-      partnership announcement, or other company news without broader strategic,
-      technological, or industry significance.
+    label: Routine corporate news
     weight: -12
+    description: >
+      A routine corporate announcement, minor funding round,
+      executive appointment, marketing announcement, minor product
+      update, partnership announcement, or other company news
+      without broader strategic, technological, or industry
+      significance.
+    include_when: >
+      The article is primarily routine company news, even when
+      the company is famous.
+    exclude_when: >
+      There is a material strategic, technological, or industry
+      development. Famous company does not by itself prevent
+      this feature.
 
   crypto_web3:
-    description: >
-      Cryptocurrency, blockchain, NFTs, tokens, decentralized finance,
-      or Web3 are the main subject. Cryptography, encryption, digital
-      signatures, authentication, and security technologies by themselves
-      do NOT qualify.
+    label: Crypto & Web3
     weight: -18
+    description: >
+      Cryptocurrency, blockchain, NFTs, tokens, decentralized
+      finance, or Web3 are the main subject.
+    include_when: >
+      Cryptocurrency, blockchain, tokens, NFTs, DeFi, or Web3
+      is the main subject.
+    exclude_when: >
+      Cryptography, encryption, digital signatures, authentication,
+      post-quantum cryptography, and security protocols. Those are
+      NOT crypto/Web3.
 
   gadget_review:
+    label: Gadget reviews
+    weight: -15
     description: >
       The article is primarily a conventional gadget review
       or consumer buying recommendation.
-    weight: -15
+    include_when: >
+      A conventional gadget review or buying guide is the
+      primary form of the article.
+    exclude_when: >
+      Deep engineering of a device, platform internals, or
+      a technical teardown that is not a buying review.
 
   entertainment_culture:
+    label: Entertainment & culture
+    weight: -18
     description: >
       Entertainment, music, celebrity, arts, or general culture
       are the main subject without a strong technology angle.
-    weight: -18
+    include_when: >
+      Entertainment or general culture is the main subject and
+      technology is not a strong angle.
+    exclude_when: >
+      Technology, software, or AI is the actual subject even
+      if culture is mentioned.

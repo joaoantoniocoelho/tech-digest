@@ -14,6 +14,12 @@ Install dependencies:
 python -m pip install -r requirements.txt
 ```
 
+Docker Compose loads `.env`. Local Python does not. Export the same variables before classification:
+
+```bash
+set -a && source .env && set +a
+```
+
 ## Run Feed Collection
 
 ```bash
@@ -22,7 +28,7 @@ python -m app.main
 
 This collects RSS/Atom metadata and stores new URLs in SQLite.
 
-It does not classify articles and does not call Ollama.
+It does not classify articles and does not call TypeSafe.
 
 Running the collector multiple times should not duplicate existing URLs.
 
@@ -46,7 +52,7 @@ processing_lookback_hours: 28
 
 28 hours is a 24-hour newspaper window plus the 4-hour collection cadence. That way an article published after the last collection before processing is still classified the next morning, instead of being dropped as too old.
 
-Historical feed entries outside that window are left unprocessed. They remain in SQLite, but they do not consume GPU time.
+Historical feed entries outside that window are left unprocessed. They remain in SQLite, but they are not sent to the classifier.
 
 ## Preview the Digest
 
@@ -54,7 +60,9 @@ Historical feed entries outside that window are left unprocessed. They remain in
 python -m app.digest
 ```
 
-This selects recent classified articles, applies the relevance threshold, and prints the digest. It does not send Telegram messages and does not mark articles as delivered.
+This selects recent classified articles, applies the relevance threshold (`minimum_score: 60`) and article cap (`maximum_articles: 8`), and prints the digest. It does not send Telegram messages and does not mark articles as delivered.
+
+`config/digest.yaml` hides scores and topic lists in the rendered digest by default (`show_score: false`, `show_topics: false`). The Why line is the compact feature labels.
 
 ## Send the Digest
 
@@ -91,6 +99,8 @@ docker compose run --rm digest python -m app.digest
 docker compose run --rm digest python -m app.send_digest
 ```
 
+Compose reads `.env` and uses normal Docker networking. Classification needs outbound HTTPS to `api.typesafe.ai`. There is no local Ollama service and no `network_mode: host`.
+
 ## Tests
 
 From the project root:
@@ -100,9 +110,24 @@ source .venv/bin/activate
 python -m unittest discover -s tests -v
 ```
 
-These cover daily-window selection, historical-article exclusion, the removal of the 20-item batch/round-robin processor, truncation, and processing failure/retry behavior.
+These cover daily-window selection, historical-article exclusion, sequential processing of the full window, truncation, processing failure/retry behavior, TypeSafe/Jev classification (mocked `system_one`), score discretization, Why/topic construction from feature labels, and relevance scoring.
 
-They do not call Ollama.
+They do not call the TypeSafe API.
+
+## Debug classification
+
+Inspect Jev's raw scores, probabilities, confidence, and the discrete values plus Python relevance score without writing to SQLite:
+
+```bash
+python -m app.debug_classification --url "https://example.com/article"
+python -m app.debug_classification --article-id 123
+```
+
+```bash
+docker compose run --rm digest python -m app.debug_classification --article-id 123
+```
+
+This does not persist classification, probabilities, or article content.
 
 ## Database
 
@@ -154,7 +179,9 @@ Collection logs report how many new entries each source contributed.
 
 Daily processing logs report the lookback window, how many articles were eligible, and how many succeeded or failed.
 
-Logs should not contain full article content.
+Feature logs use readable labels (`Direct:`, `Related:`, `Penalties:`, `Why:`), not raw feature ids.
+
+Logs should not contain full article content. If `TYPESAFE_API_KEY` appears in an exception, it is replaced with `[redacted]`.
 
 ## Cron
 
@@ -177,23 +204,30 @@ Recommended schedule:
 0 7 * * * cd /home/joaoac/tech-digest && /usr/bin/docker compose run --rm digest python -m app.send_digest >> logs/digest.log 2>&1
 ```
 
-Do not point the collector cron job at the daily processor. Collection should stay cheap and independent of Ollama.
+Do not point the collector cron job at the daily processor. Collection should stay cheap and independent of classification.
 
-## Ollama
+## TypeSafe / Jev
 
-Ollama runs on the home server separately from the application.
+Classification uses the official `typesafe-sdk` client (pinned in `requirements.txt`) and one `system_one` call per article. There is no Ollama or local Qwen runtime.
 
-Check available models:
-
-```bash
-curl http://localhost:11434/api/tags
-```
-
-The current classifier model is:
+Set in `.env`:
 
 ```text
-qwen3.5:9b
+TYPESAFE_API_KEY=...
+TYPESAFE_MODEL=jev-1.13.0
 ```
+
+The default model pin is `jev-1.13.0` (override with `TYPESAFE_MODEL`).
+
+Article title and body are sent to the TypeSafe API for classification. Full article content is not persisted in the local SQLite database. This project does not make claims about TypeSafe's own retention.
+
+If `TYPESAFE_API_KEY` is missing, classification fails with:
+
+```text
+TYPESAFE_API_KEY is not configured
+```
+
+The collector and digest preview jobs do not use these variables.
 
 ## Reprocessing Articles
 
@@ -212,7 +246,8 @@ with get_connection() as connection:
             processed_at = NULL,
             processing_attempts = 0,
             last_processing_error = NULL,
-            failed_at = NULL
+            failed_at = NULL,
+            delivered_at = NULL
         WHERE processed_at IS NOT NULL
     ''')
 "
@@ -262,7 +297,7 @@ Temporary:
 ```text
 downloaded HTML
 full extracted article text
-LLM prompt content
+classifier request payload (title and content)
 ```
 
 Full article content should not be persisted or logged.

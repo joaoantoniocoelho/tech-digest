@@ -14,7 +14,7 @@ The current design separates two different questions.
 
 What is this article about?
 
-Answered by the LLM.
+Answered by TypeSafe Jev (typed Score outputs).
 
 ### Question 2
 
@@ -26,7 +26,7 @@ Answered deterministically by Python.
 Article
    |
    v
-LLM Feature Extraction
+Jev Feature Extraction
    |
    v
 Feature Vector
@@ -50,9 +50,14 @@ Each feature contains:
 
 ```yaml
 example_feature:
-  description: >
-    Description used by the classifier.
+  label: Readable name
   weight: 50
+  description: >
+    What the feature means.
+  include_when: >
+    When to activate it.
+  exclude_when: >
+    When it must stay at 0.
 ```
 
 Positive weights represent areas of interest.
@@ -80,14 +85,14 @@ Examples of lower-priority areas include:
 
 ## Feature Strength
 
-For every article, the model evaluates every feature.
+For every article, Jev evaluates every feature.
 
-Possible values:
+Possible values after discretization:
 
 ```text
-0 = no meaningful connection
-1 = related or secondary
-2 = directly relevant
+0 = does not meaningfully apply (default)
+1 = explicitly present, but secondary
+2 = central to the article
 ```
 
 For example:
@@ -101,7 +106,19 @@ For example:
 }
 ```
 
+Jev returns a continuous score per feature. Python maps it to 0/1/2:
+
+```text
+< 0.75  → 0
+< 1.50  → 1
+otherwise 2
+```
+
+Importance uses a separate 0–3 scale (`< 0.50` / `< 1.50` / `< 2.50`).
+
 The classifier is instructed to describe the article factually rather than trying to maximize its relevance.
+
+`why_interesting` and `topics` are not free-form model text. Python takes at most three **positive** features, ordered by contribution to the score, and joins their labels with ` · `. Negative features never appear there.
 
 ## Importance
 
@@ -142,15 +159,22 @@ Current strength multipliers:
 2 → 1.00
 ```
 
-The strongest positive matches contribute the most.
+The strongest positive match contributes at full weight. Extra matches fall off quickly:
 
-Additional matches have diminishing influence.
+```text
+1st match → 100%
+2nd match → 28%
+3rd match → 10%
+4th match → 4%
+5th match → 2%
+further   → 1%
+```
 
-This prevents an article from receiving an artificially high score simply because the model marked many loosely related features.
+This keeps a stacked AI roundup highly ranked without pinning the ceiling at 100.
 
-Importance provides a small adjustment after feature scoring.
+Importance is a small adjustment after feature scoring (`-5 / 0 / +5 / +8`).
 
-Negative features apply a capped penalty.
+Negative features apply a capped penalty (at most 25 points).
 
 The final score is clamped to:
 
@@ -173,7 +197,7 @@ The score is intended to mean roughly:
 
 These ranges are guidelines, not hard editorial rules.
 
-The future digest builder will likely use a minimum score plus a maximum number of articles rather than trying to fill a fixed quota.
+The digest already uses a minimum score (`minimum_score: 60`) plus a maximum number of articles (`maximum_articles: 8`). It does not fill a quota with weaker items.
 
 ## Important Design Rule
 
@@ -189,7 +213,7 @@ The profile can therefore change without changing how article content is extract
 
 ## Model Responsibility
 
-The model should determine facts such as:
+Jev should determine facts such as:
 
 ```text
 Is this about Apple Silicon?
@@ -201,7 +225,7 @@ Is security a major part of the article?
 Is this primarily a hardware project?
 ```
 
-The model should not decide:
+Jev should not decide:
 
 ```text
 How much does João care about Apple Silicon?

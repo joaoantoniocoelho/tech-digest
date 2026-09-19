@@ -1,6 +1,10 @@
+import os
 import yaml
 
-from app.classifier import classify_article
+from app.classifier import (
+    classify_article,
+    _match_counts,
+)
 from app.content import fetch_article_content
 from app.db import (
     record_processing_error,
@@ -17,30 +21,17 @@ CLASSIFICATION_CONTENT_HEAD_LENGTH = 20000
 CLASSIFICATION_CONTENT_TAIL_LENGTH = 5000
 
 
-def _describe_features(
-    feature_strengths: dict,
-    profile: dict,
-) -> str:
-    matches = []
+def _sanitize_error(error: Exception) -> str:
+    text = f"{type(error).__name__}: {error}"
+    api_key = os.environ.get(
+        "TYPESAFE_API_KEY",
+        "",
+    ).strip()
 
-    for feature_id, strength in feature_strengths.items():
-        if strength == 0:
-            continue
+    if api_key:
+        text = text.replace(api_key, "[redacted]")
 
-        strength_label = (
-            "direct"
-            if strength == 2
-            else "related"
-        )
-
-        matches.append(
-            f"{feature_id} [{strength_label}]"
-        )
-
-    if not matches:
-        return "None"
-
-    return ", ".join(matches)
+    return text
 
 
 def _get_fallback_content(article):
@@ -105,6 +96,44 @@ def _record_failure(
             f"Attempt {attempts}/"
             f"{MAX_PROCESSING_ATTEMPTS}."
         )
+
+
+def _print_match_summary(
+    feature_strengths: dict,
+    profile: dict,
+    why_interesting: str,
+):
+    matches = _match_counts(
+        feature_strengths=feature_strengths,
+        features=profile["features"],
+    )
+
+    print(
+        f"Feature matches: "
+        f"{len(matches['direct'])} direct, "
+        f"{len(matches['related'])} related"
+    )
+
+    if matches["direct"]:
+        print(
+            "Direct: "
+            + ", ".join(matches["direct"])
+        )
+
+    if matches["related"]:
+        print(
+            "Related: "
+            + ", ".join(matches["related"])
+        )
+
+    if matches["penalties"]:
+        print(
+            "Penalties: "
+            + ", ".join(matches["penalties"])
+        )
+
+    if why_interesting:
+        print(f"Why: {why_interesting}")
 
 
 def _process_article(
@@ -224,43 +253,28 @@ def _process_article(
             f"{classification['importance']}"
         )
 
-        print(
-            f"Why: "
-            f"{classification['why_interesting']}"
-        )
-
-        print(
-            "Topics: "
-            + ", ".join(
-                classification["topics"]
-            )
-        )
-
-        print(
-            "Features: "
-            + _describe_features(
-                classification[
-                    "feature_strengths"
-                ],
-                profile,
-            )
+        _print_match_summary(
+            feature_strengths=classification[
+                "feature_strengths"
+            ],
+            profile=profile,
+            why_interesting=classification[
+                "why_interesting"
+            ],
         )
 
         return True
 
     except Exception as error:
+        message = _sanitize_error(error)
+
         print(
-            f"Processing failed: "
-            f"{type(error).__name__}: "
-            f"{error}"
+            f"Processing failed: {message}"
         )
 
         _record_failure(
             article_id=article["id"],
-            error=(
-                f"{type(error).__name__}: "
-                f"{error}"
-            ),
+            error=message,
         )
 
         return False

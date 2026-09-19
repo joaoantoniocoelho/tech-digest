@@ -92,9 +92,13 @@ def render_text_digest(
         lines.append(title_line)
         lines.append("")
 
-        if article["why_interesting"]:
+        why_interesting = (
+            article["why_interesting"] or ""
+        ).strip()
+
+        if why_interesting:
             lines.append(
-                article["why_interesting"]
+                "Why: " + why_interesting
             )
             lines.append("")
 

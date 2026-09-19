@@ -301,6 +301,68 @@ def get_articles_for_daily_processing(
     return articles
 
 
+def _article_from_row(row):
+    if row is None:
+        return None
+
+    return {
+        "id": row["id"],
+        "source": row["source"],
+        "title": row["title"],
+        "url": row["url"],
+        "published_at": row["published_at"],
+        "discovered_at": row["discovered_at"],
+        "feed_excerpt": row["feed_excerpt"],
+        "processing_attempts": row[
+            "processing_attempts"
+        ],
+    }
+
+
+def get_article_by_id(article_id: int):
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT
+                id,
+                source,
+                title,
+                url,
+                published_at,
+                discovered_at,
+                feed_excerpt,
+                processing_attempts
+            FROM articles
+            WHERE id = ?
+            """,
+            (article_id,),
+        ).fetchone()
+
+    return _article_from_row(row)
+
+
+def get_article_by_url(url: str):
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT
+                id,
+                source,
+                title,
+                url,
+                published_at,
+                discovered_at,
+                feed_excerpt,
+                processing_attempts
+            FROM articles
+            WHERE url = ?
+            """,
+            (url,),
+        ).fetchone()
+
+    return _article_from_row(row)
+
+
 def save_classification(
     article_id: int,
     result: dict,

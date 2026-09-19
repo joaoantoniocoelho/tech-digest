@@ -1,9 +1,12 @@
 import ast
+import runpy
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
+
+runpy.run_path(str(Path(__file__).with_name("_bootstrap.py")))
 
 import yaml
 
@@ -494,6 +497,78 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
         self.assertIsNotNone(row["processed_at"])
         self.assertIsNone(row["failed_at"])
         self.assertIsNone(row["last_processing_error"])
+
+    @patch("app.processor.classify_article")
+    @patch("app.processor.fetch_article_content")
+    def test_classifier_exception_increments_attempts(
+        self,
+        fetch_article_content,
+        classify_article,
+    ):
+        fetch_article_content.return_value = "x" * 300
+        classify_article.side_effect = RuntimeError(
+            "TypeSafe down"
+        )
+
+        summary = process_articles([self.article])
+
+        self.assertEqual(summary["processed"], 0)
+        self.assertEqual(summary["failed"], 1)
+
+        row = self._row()
+        self.assertEqual(row["processing_attempts"], 1)
+        self.assertIsNone(row["failed_at"])
+        self.assertIsNone(row["processed_at"])
+        self.assertIn(
+            "TypeSafe down",
+            row["last_processing_error"],
+        )
+
+    @patch("app.processor.classify_article")
+    @patch("app.processor.fetch_article_content")
+    def test_save_classification_does_not_persist_content(
+        self,
+        fetch_article_content,
+        classify_article,
+    ):
+        fetch_article_content.return_value = (
+            "secret article body " * 20
+        )
+        classify_article.return_value = {
+            "feature_strengths": self._load_zero_features(),
+            "importance": 1,
+            "why_interesting": "AI agents",
+            "topics": ["AI agents"],
+        }
+
+        process_articles([self.article])
+
+        row = self._row()
+        values = [
+            str(row[key])
+            for key in row.keys()
+            if row[key] is not None
+        ]
+
+        self.assertTrue(
+            all(
+                "secret article body" not in value
+                for value in values
+            )
+        )
+
+        with db.get_connection() as connection:
+            columns = {
+                info["name"]
+                for info in connection.execute(
+                    "PRAGMA table_info(articles)"
+                )
+            }
+
+        self.assertNotIn("content", columns)
+        self.assertNotIn("probabilities", columns)
+        self.assertNotIn("confidence", columns)
+        self.assertNotIn("raw_jev", columns)
 
 
 class CollectionEntryPointTestCase(unittest.TestCase):

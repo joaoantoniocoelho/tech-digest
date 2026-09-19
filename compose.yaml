@@ -3,16 +3,10 @@ services:
     build: .
     container_name: tech-digest
 
-    network_mode: host
-
     volumes:
       - ./data:/app/data
 
     env_file:
       - .env
-
-    environment:
-      OLLAMA_URL: http://127.0.0.1:11434
-      OLLAMA_MODEL: qwen3.5:9b
 
     restart: "no"
