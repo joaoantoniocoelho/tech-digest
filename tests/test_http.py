@@ -188,10 +188,12 @@ class HttpApiTestCase(unittest.TestCase):
                 "SELECT unsubscribe_token FROM subscribers"
             ).fetchone()["unsubscribe_token"]
 
-        page_status, _headers, page = self.request("GET", f"/unsubscribe/{token}")
+        page_status, headers, page = self.request("GET", f"/unsubscribe/{token}")
         self.assertEqual(page_status, 200)
-        self.assertIn(b"Confirm that you want to stop", page)
-        self.assertNotIn(token.encode(), page.split(b"action=", 1)[0])
+        self.assertEqual(page, b'{"ok": true}')
+        self.assertIn("application/json", headers["content-type"])
+        self.assertNotIn(b"<html", page.lower())
+        self.assertNotIn(token.encode(), page)
         with db.get_connection() as connection:
             status = connection.execute(
                 "SELECT status FROM subscribers"
@@ -203,7 +205,7 @@ class HttpApiTestCase(unittest.TestCase):
             f"/unsubscribe/{token}",
         )
         self.assertEqual(post_status, 200)
-        self.assertIn(b"no longer receive", body)
+        self.assertEqual(body, b'{"ok": true}')
         with db.get_connection() as connection:
             status = connection.execute(
                 "SELECT status FROM subscribers"
@@ -223,7 +225,7 @@ class HttpApiTestCase(unittest.TestCase):
             "/unsubscribe/this-token-does-not-exist-at-all",
         )
         self.assertEqual(missing_status, 404)
-        self.assertIn(b"not valid", missing)
+        self.assertEqual(missing, b'{"ok": false}')
         self.assertNotIn(b"reader@example.com", missing)
 
     def test_job_endpoint_auth_and_lock(self):

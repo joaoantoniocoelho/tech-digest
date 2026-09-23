@@ -320,7 +320,7 @@ Each item is a compact Why line of at most three positive feature labels. Scores
 
 Delivery goes through Resend (`digest.joaoac.com`). The digest is built once, then sent separately to each active subscriber with that subscriber's unsubscribe link. Articles are marked delivered when at least one send succeeds. The Telegram sender remains in the tree, and `send_digest` does not call it.
 
-Subscribers live in the same SQLite database (`subscribers`). `POST /subscribe` activates an address, including one that had unsubscribed. `GET /unsubscribe/<token>` only shows a confirmation page; `POST` performs the unsubscribe, so mail clients that prefetch links do not remove people.
+Subscribers live in the same SQLite database (`subscribers`). `POST /subscribe` activates an address, including one that had unsubscribed. `GET /unsubscribe/<token>` only reports whether the token exists; `POST` performs the unsubscribe, so mail clients that prefetch links do not remove people. The confirmation page lives on the public site.
 
 ## Docker
 
