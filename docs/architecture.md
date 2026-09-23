@@ -58,7 +58,7 @@ SQLite
 Digest Builder
    |
    v
-Telegram
+Email
 ```
 
 ## Components
@@ -86,6 +86,9 @@ Sources are configured in:
 ```text
 config/sources.yaml
 ```
+
+RSS sources may set `max_entries` to a positive integer to process only the
+first entries returned by the feed; sources without it process every entry.
 
 ## Database
 
@@ -157,7 +160,7 @@ The extracted text exists only in memory during processing.
 
 Once classification finishes, it is discarded.
 
-If extraction fails, a sufficiently long RSS excerpt may be used as a fallback. Long articles are truncated before they are sent to the model, keeping the beginning and the end.
+If extraction fails, a sufficiently long RSS excerpt may be used as a fallback. If both are unavailable, the first attempt is retried. A later attempt classifies from the title and URL only, with instructions to stay conservative and not infer unsupported details. That fallback text is not stored. Long articles are truncated before they are sent to the model, keeping the beginning and the end.
 
 ## Classification
 
@@ -291,7 +294,7 @@ save derived data
 
 TypeSafe API calls remain sequential. The processor does not run inference in parallel.
 
-Articles that cannot be extracted or classified increment `processing_attempts`. After the maximum number of attempts they are marked with `failed_at` so they do not block the pipeline forever.
+Articles that cannot be classified increment `processing_attempts`. After the maximum number of attempts they are marked with `failed_at` so they do not block the pipeline forever. A missing article body is retried once, then classified from title and URL metadata so a permanent fetch failure does not leave the article unclassified.
 
 In-flight retries remain eligible even if they have aged slightly outside the daily window. Historical articles that were never attempted are left unprocessed.
 
@@ -302,6 +305,7 @@ Implemented in:
 ```text
 app/digest.py
 app/send_digest.py
+app/email.py
 app/telegram.py
 ```
 
@@ -312,9 +316,9 @@ The digest selects recent classified articles that:
 - stay under the article cap (`maximum_articles: 8`);
 - have not already been delivered.
 
-Each item is a compact Why line of at most three positive feature labels. Scores and topic lists are hidden in the Telegram message by default (`show_score` / `show_topics` in `config/digest.yaml`).
+Each item is a compact Why line of at most three positive feature labels. Scores and topic lists are hidden in the email by default (`show_score` / `show_topics` in `config/digest.yaml`).
 
-Articles are marked delivered only after a successful Telegram send.
+Delivery goes through Resend (`digest.joaoac.com`). Articles are marked delivered only after a successful send. The Telegram sender remains in the tree, and `send_digest` does not call it.
 
 ## Docker
 

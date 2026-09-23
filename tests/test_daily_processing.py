@@ -2,7 +2,9 @@ import ast
 import runpy
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -20,9 +22,11 @@ from app.db import (
 )
 from app.processor import (
     MAX_PROCESSING_ATTEMPTS,
+    _get_fallback_content,
     _prepare_classification_content,
     process_articles,
 )
+from app.scoring import calculate_relevance_score
 
 
 def _hours_ago(hours: float) -> str:
@@ -361,6 +365,13 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
             prepared,
         )
 
+    def test_rss_excerpt_length_boundary(self):
+        for length, accepted in ((8, False), (99, False), (100, True)):
+            with self.subTest(length=length):
+                self.article["feed_excerpt"] = "x" * length
+                expected = "x" * length if accepted else None
+                self.assertEqual(_get_fallback_content(self.article), expected)
+
     @patch("app.processor.classify_article")
     @patch("app.processor.fetch_article_content")
     def test_successful_classification_is_not_reselected(
@@ -369,6 +380,7 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
         classify_article,
     ):
         fetch_article_content.return_value = "x" * 300
+        self.article["feed_excerpt"] = "RSS summary " * 12
         classify_article.return_value = {
             "feature_strengths": self._load_zero_features(),
             "importance": 1,
@@ -387,6 +399,76 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
         )
         self.assertEqual(eligible, [])
         classify_article.assert_called_once()
+        self.assertEqual(
+            classify_article.call_args.kwargs["content"],
+            "x" * 300,
+        )
+        self.assertEqual(
+            classify_article.call_args.kwargs["title"],
+            self.article["title"],
+        )
+
+    @patch("app.processor.classify_article")
+    @patch("app.processor.fetch_article_content")
+    def test_rss_excerpt_is_used_when_extraction_fails(
+        self,
+        fetch_article_content,
+        classify_article,
+    ):
+        excerpt = (
+            "Meet GPT-6 Sol and Luna, two models that bring frontier "
+            "intelligence to everyday work with different balances of "
+            "capability and cost."
+        )
+        self.assertEqual(len(excerpt), 133)
+        self.article["feed_excerpt"] = excerpt
+        fetch_article_content.return_value = None
+        classify_article.return_value = {
+            "feature_strengths": self._load_zero_features(),
+            "importance": 1,
+            "why_interesting": "Excerpt was enough.",
+            "topics": ["RSS"],
+        }
+
+        summary = process_articles([self.article])
+
+        self.assertEqual(summary["processed"], 1)
+        self.assertEqual(summary["failed"], 0)
+        classify_article.assert_called_once()
+        self.assertEqual(
+            classify_article.call_args.kwargs["content"],
+            excerpt,
+        )
+        self.assertNotIn(
+            "Full article content is unavailable",
+            classify_article.call_args.kwargs["content"],
+        )
+        row_values = [
+            str(value) for value in self._row() if value is not None
+        ]
+        self.assertNotIn(excerpt, row_values)
+
+    @patch("app.processor.classify_article")
+    @patch("app.processor.fetch_article_content", return_value=None)
+    def test_100_character_excerpt_is_used_when_extraction_fails(
+        self,
+        fetch_article_content,
+        classify_article,
+    ):
+        excerpt = "x" * 100
+        self.article["feed_excerpt"] = excerpt
+        classify_article.return_value = {
+            "feature_strengths": self._load_zero_features(),
+            "importance": 1,
+            "why_interesting": "Useful summary.",
+            "topics": ["RSS"],
+        }
+
+        summary = process_articles([self.article])
+
+        self.assertEqual(summary, {"processed": 1, "failed": 0})
+        self.assertEqual(classify_article.call_args.kwargs["content"], excerpt)
+        fetch_article_content.assert_called_once_with(self.article["url"])
 
     @patch("app.processor.classify_article")
     @patch("app.processor.fetch_article_content")
@@ -438,29 +520,147 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
         classify_article.assert_not_called()
         fetch_article_content.assert_not_called()
 
+    @patch("app.processor.classify_article")
     @patch("app.processor.fetch_article_content")
-    def test_extraction_failure_increments_attempts(
+    def test_first_extraction_failure_without_excerpt_does_not_classify(
         self,
         fetch_article_content,
+        classify_article,
     ):
         fetch_article_content.return_value = None
+        self.article["feed_excerpt"] = "x" * 99
 
         summary = process_articles([self.article])
 
         self.assertEqual(summary["processed"], 0)
         self.assertEqual(summary["failed"], 1)
+        classify_article.assert_not_called()
 
         row = self._row()
         self.assertEqual(row["processing_attempts"], 1)
         self.assertIsNone(row["failed_at"])
         self.assertIsNone(row["processed_at"])
+        self.assertIsNotNone(row["last_processing_error"])
 
+    @patch("app.processor.classify_article")
     @patch("app.processor.fetch_article_content")
-    def test_marks_failed_after_max_attempts(
+    def test_previous_failure_uses_metadata_only_classification(
         self,
         fetch_article_content,
+        classify_article,
     ):
         fetch_article_content.return_value = None
+        self.article["feed_excerpt"] = "too short"
+        record_processing_error(
+            article_id=self.article_id,
+            error="Could not extract article content",
+            fail_after_attempts=MAX_PROCESSING_ATTEMPTS,
+        )
+        feature_strengths = self._load_zero_features()
+        classify_article.return_value = {
+            "feature_strengths": feature_strengths,
+            "importance": 2,
+            "why_interesting": "Title suggests a major model release.",
+            "topics": ["Models"],
+        }
+
+        with open("config/interests.yaml") as file:
+            profile = yaml.safe_load(file)
+
+        expected_score = calculate_relevance_score(
+            feature_strengths=feature_strengths,
+            profile=profile,
+            importance=2,
+        )
+
+        output = StringIO()
+        with redirect_stdout(output):
+            summary = process_articles([self.article])
+
+        self.assertEqual(summary["processed"], 1)
+        self.assertEqual(summary["failed"], 0)
+        self.assertIn(
+            "Article content unavailable after retry; "
+            "using title/URL metadata only",
+            output.getvalue(),
+        )
+
+        classify_article.assert_called_once()
+        content = classify_article.call_args.kwargs["content"]
+        self.assertEqual(
+            classify_article.call_args.kwargs["title"],
+            self.article["title"],
+        )
+        self.assertIn(self.article["url"], content)
+        self.assertIn(
+            "Full article content is unavailable",
+            content,
+        )
+        self.assertIn(
+            "Only the title and URL may be used as evidence",
+            content,
+        )
+        self.assertIn(
+            "Classification must be conservative",
+            content,
+        )
+        self.assertIn(
+            "Do not infer unsupported details",
+            content,
+        )
+        self.assertNotIn(self.article["title"], content)
+
+        row = self._row()
+        self.assertEqual(
+            row["relevance_score"],
+            expected_score,
+        )
+        self.assertEqual(
+            row["why_interesting"],
+            "Title suggests a major model release.",
+        )
+        self.assertIn("Models", row["topics"])
+        self.assertIsNotNone(row["processed_at"])
+        self.assertIsNone(row["last_processing_error"])
+        self.assertIsNone(row["failed_at"])
+        self.assertEqual(row["processing_attempts"], 1)
+
+        stored_values = [
+            str(row[key])
+            for key in row.keys()
+            if row[key] is not None
+        ]
+        self.assertTrue(
+            all(
+                "Full article content is unavailable"
+                not in value
+                for value in stored_values
+            )
+        )
+        self.assertTrue(
+            all(
+                "Do not infer unsupported details"
+                not in value
+                for value in stored_values
+            )
+        )
+
+        eligible = get_articles_for_daily_processing(
+            lookback_hours=24,
+        )
+        self.assertEqual(eligible, [])
+
+    @patch("app.processor.classify_article")
+    @patch("app.processor.fetch_article_content")
+    def test_marks_failed_after_max_classification_attempts(
+        self,
+        fetch_article_content,
+        classify_article,
+    ):
+        fetch_article_content.return_value = "x" * 300
+        classify_article.side_effect = RuntimeError(
+            "TypeSafe down"
+        )
 
         for _ in range(MAX_PROCESSING_ATTEMPTS):
             process_articles([self.article])

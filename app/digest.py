@@ -2,6 +2,7 @@ from pathlib import Path
 
 import yaml
 
+from app.classifier import is_duplicate_story
 from app.db import (
     get_digest_candidates,
     init_db,
@@ -36,11 +37,29 @@ def build_digest() -> dict:
     minimum_score = config["minimum_score"]
     maximum_articles = config["maximum_articles"]
 
-    articles = get_digest_candidates(
+    candidates = get_digest_candidates(
         lookback_hours=lookback_hours,
         minimum_score=minimum_score,
-        maximum_articles=maximum_articles,
     )
+
+    articles = []
+
+    for candidate in candidates:
+        if len(articles) >= maximum_articles:
+            break
+
+        title = " ".join(candidate["title"].split()).casefold()
+
+        if any(
+            title == " ".join(article["title"].split()).casefold()
+            for article in articles
+        ):
+            continue
+
+        if articles and is_duplicate_story(candidate, articles):
+            continue
+
+        articles.append(candidate)
 
     return {
         "lookback_hours": lookback_hours,

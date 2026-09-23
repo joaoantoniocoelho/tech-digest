@@ -6,6 +6,7 @@ import httpx
 
 MAX_FEED_EXCERPT_LENGTH = 2500
 FEED_TIMEOUT_SECONDS = 15.0
+_UNSET = object()
 
 
 class _HTMLTextExtractor(HTMLParser):
@@ -100,7 +101,14 @@ def _download_feed(name: str, url: str) -> bytes | None:
     return None
 
 
-def fetch_feed(name: str, url: str):
+def fetch_feed(name: str, url: str, max_entries=_UNSET):
+    if max_entries is not _UNSET and (
+        isinstance(max_entries, bool)
+        or not isinstance(max_entries, int)
+        or max_entries <= 0
+    ):
+        raise ValueError("max_entries must be a positive integer")
+
     feed_content = _download_feed(
         name=name,
         url=url,
@@ -123,7 +131,9 @@ def fetch_feed(name: str, url: str):
 
     articles = []
 
-    for entry in feed.entries:
+    entries = feed.entries if max_entries is _UNSET else feed.entries[:max_entries]
+
+    for entry in entries:
         article_url = entry.get("link")
 
         if not article_url:

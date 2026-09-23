@@ -4,9 +4,6 @@ sources:
   - name: Hacker News
     url: https://news.ycombinator.com/rss
 
-  - name: Lobsters
-    url: https://lobste.rs/rss
-
 
   # Software engineering / industry
 
@@ -15,13 +12,6 @@ sources:
 
   - name: The Pragmatic Engineer
     url: https://newsletter.pragmaticengineer.com/feed
-
-  - name: Akitaonrails
-    url: https://akitaonrails.com/index.xml
-
-  - name: The M.Akita Chronicles
-    url: https://blog.themakitachronicles.com/newsletters/index.xml
-
 
   # AI / AI engineering
 
@@ -34,6 +24,9 @@ sources:
   - name: Simon Willison's Newsletter
     url: https://simonw.substack.com/feed
 
+  - name: OpenAI
+    url: https://openai.com/news/rss.xml
+    max_entries: 50
 
   # Technology news / startups
 
@@ -42,6 +35,7 @@ sources:
 
   - name: TechCrunch
     url: https://techcrunch.com/feed/
+
 
 
   # Technology business / strategy

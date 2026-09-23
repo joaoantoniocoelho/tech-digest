@@ -60,7 +60,7 @@ Historical feed entries outside that window are left unprocessed. They remain in
 python -m app.digest
 ```
 
-This selects recent classified articles, applies the relevance threshold (`minimum_score: 60`) and article cap (`maximum_articles: 8`), and prints the digest. It does not send Telegram messages and does not mark articles as delivered.
+This selects recent classified articles, applies the relevance threshold (`minimum_score: 60`) and article cap (`maximum_articles: 8`), and prints the digest. It does not send email and does not mark articles as delivered.
 
 `config/digest.yaml` hides scores and topic lists in the rendered digest by default (`show_score: false`, `show_topics: false`). The Why line is the compact feature labels.
 
@@ -70,7 +70,16 @@ This selects recent classified articles, applies the relevance threshold (`minim
 python -m app.send_digest
 ```
 
-This sends the digest through Telegram and marks the selected articles as delivered only after a successful send.
+This sends the digest by email through Resend and marks the selected articles as delivered only after a successful send.
+
+Set in `.env`:
+
+```text
+RESEND_API_KEY=...
+RESEND_TO=joaoantonioscoelho@gmail.com
+```
+
+The sender defaults to `Tech Digest <digest@digest.joaoac.com>`. Override it with `RESEND_FROM` if needed. `app/telegram.py` stays in the project, and `send_digest` does not call it.
 
 ## Run with Docker
 
@@ -269,9 +278,11 @@ Some pages cannot be extracted successfully.
 
 When this happens, the processor tries a sufficiently long RSS excerpt.
 
-If neither full content nor a usable excerpt is available, the article records a processing attempt and remains eligible for retry.
+If neither full content nor a usable excerpt is available, the first attempt records a processing error and the article remains eligible for retry.
 
-After the maximum number of attempts, the article is marked with `failed_at` and is no longer selected.
+If a later attempt still cannot get full content or a usable excerpt, the processor classifies from the title and URL only. The prompt says the article body is unavailable, that only the title and URL are evidence, and that classification must stay conservative and must not infer unsupported details. That prompt is not stored.
+
+Classification errors still increment `processing_attempts`. After the maximum number of attempts, the article is marked with `failed_at` and is no longer selected.
 
 In-flight retries remain eligible even if they have aged slightly outside the daily window. That preserves retry behavior with a once-per-day processor.
 

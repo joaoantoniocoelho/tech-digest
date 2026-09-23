@@ -20,12 +20,16 @@ def collect_feeds() -> int:
 
     for source in config["sources"]:
         print()
-        print(f"Checking {source['name']}...")
+        print(f"Collecting: {source['name']}")
 
+        feed_options = {}
+        if "max_entries" in source:
+            feed_options["max_entries"] = source["max_entries"]
         articles = fetch_feed(
-            name=source["name"],
-            url=source["url"],
+            name=source["name"], url=source["url"], **feed_options
         )
+
+        print(f"Found: {len(articles)} entries")
 
         source_new = 0
 
@@ -37,7 +41,7 @@ def collect_feeds() -> int:
                 source_new += 1
                 total_new += 1
 
-        print(f"{source_new} new articles")
+        print(f"New: {source_new}")
 
     print()
     print(f"Collection complete: {total_new} new articles")

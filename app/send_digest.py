@@ -1,10 +1,17 @@
+from datetime import datetime
+
 from app.db import mark_articles_delivered
 from app.digest import (
     build_digest,
     load_digest_config,
     render_text_digest,
 )
-from app.telegram import send_message
+from app.email import (
+    digest_subject,
+    render_html_digest,
+    send_email,
+)
+# from app.telegram import send_message
 
 
 def send_daily_digest():
@@ -18,19 +25,36 @@ def send_daily_digest():
         print("No articles selected for the digest.")
         return
 
-    message = render_text_digest(
-        digest=digest,
-        show_score=config.get(
-            "show_score",
-            False,
-        ),
-        show_topics=config.get(
-            "show_topics",
-            False,
-        ),
+    show_score = config.get(
+        "show_score",
+        False,
+    )
+    show_topics = config.get(
+        "show_topics",
+        False,
     )
 
-    send_message(message)
+    message = render_text_digest(
+        digest=digest,
+        show_score=show_score,
+        show_topics=show_topics,
+    )
+
+    sent_at = datetime.now().astimezone()
+
+    html = render_html_digest(
+        digest=digest,
+        show_score=show_score,
+        show_topics=show_topics,
+        sent_at=sent_at,
+    )
+
+    # send_message(message)
+    result = send_email(
+        subject=digest_subject(sent_at),
+        html_body=html,
+        text=message,
+    )
 
     article_ids = [
         article["id"]
@@ -44,6 +68,10 @@ def send_daily_digest():
     print(
         f"Digest sent with "
         f"{len(articles)} articles."
+    )
+
+    print(
+        f"Resend id: {result['id']}"
     )
 
     print(

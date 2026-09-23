@@ -21,7 +21,7 @@ Implemented:
 - debug classification CLI
 - deterministic relevance scoring
 - ranked digest over a publication-time window (score threshold + article cap)
-- Telegram delivery after successful send
+- Email delivery through Resend after a successful send
 
 ## Next: Daily Use and Calibration
 

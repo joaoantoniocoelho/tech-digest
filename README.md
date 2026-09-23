@@ -20,7 +20,7 @@ Tech Digest is designed to:
 - extract article content only temporarily;
 - classify articles with TypeSafe Jev (typed Score decisions);
 - rank articles based on a personal interest profile;
-- deliver a small daily digest through Telegram.
+- deliver a small daily digest by email.
 
 The final digest is intentionally lightweight.
 
@@ -43,9 +43,9 @@ The original article remains the destination.
 
 Collection, storage, scoring, and delivery run on my home server.
 
-Article text is sent to the TypeSafe API for classification only. Full article content is not persisted in the local SQLite database. This project does not make claims about TypeSafe's own retention.
+Article text is sent to the TypeSafe API for classification. Titles and short RSS excerpts are sent for digest duplicate checks. Full article content is not persisted in the local SQLite database. This project does not make claims about TypeSafe's own retention.
 
-Telegram delivery uses the public Telegram Bot API.
+Email delivery uses the Resend API and the verified domain `digest.joaoac.com`.
 
 ### Do not republish articles
 
@@ -116,7 +116,7 @@ SQLite
 Ranked digest
     |
     v
-Telegram
+Email
 ```
 
 Collection and classification are separate jobs.
@@ -131,11 +131,12 @@ The extracted article text exists only during processing and is discarded afterw
 
 Set these in `.env` (see [Operations](docs/operations.md)):
 
-- `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` for delivery;
-- `TYPESAFE_API_KEY` (required for classification);
+- `RESEND_API_KEY` and `RESEND_TO` for email delivery;
+- optional `RESEND_FROM` (default `Tech Digest <digest@digest.joaoac.com>`);
+- `TYPESAFE_API_KEY` (required for classification and digest duplicate checks);
 - optional `TYPESAFE_MODEL` (default `jev-1.13.0`).
 
-Docker Compose loads `.env` automatically. A local Python shell does not, so export the same variables before `process_daily` or `debug_classification`.
+Docker Compose loads `.env` automatically. A local Python shell does not, so export the same variables before `process_daily`, `send_digest`, or `debug_classification`.
 
 ## Current Features
 
@@ -152,7 +153,8 @@ Docker Compose loads `.env` automatically. A local Python shell does not, so exp
 - Deterministic relevance scoring
 - Personalized interest profile
 - Daily ranked digest
-- Telegram delivery
+- Jev comparison of titles and RSS excerpts to remove repeated stories across sources before filling the digest
+- Email delivery through Resend
 - Processing logs
 
 ## Project Structure
@@ -172,6 +174,7 @@ tech-digest/
 │   ├── scoring.py
 │   ├── digest.py
 │   ├── send_digest.py
+│   ├── email.py
 │   └── telegram.py
 │
 ├── config/
@@ -209,7 +212,7 @@ daily classification of all recent articles
         ↓
 daily ranked digest
         ↓
-Telegram
+Email
 ```
 
 The daily processor selects articles by publication time (`published_at`), falling back to `discovered_at` only when no usable publication timestamp exists.
@@ -262,7 +265,7 @@ python -m app.debug_classification --url "https://example.com/article"
 python -m app.debug_classification --article-id 123
 ```
 
-Send the digest through Telegram:
+Send the digest by email:
 
 ```bash
 python -m app.send_digest
@@ -312,4 +315,4 @@ More details:
 
 Tech Digest is currently under active development.
 
-The daily newspaper pipeline is functional: periodic collection, daily classification, ranked digest, and Telegram delivery.
+The daily newspaper pipeline is functional: periodic collection, daily classification, ranked digest, and email delivery.

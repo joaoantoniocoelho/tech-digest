@@ -2,6 +2,7 @@ features:
   major_ai_model_development:
     label: AI models
     weight: 55
+    direct_match_score_floor: 85
     description: >
       The article is mainly about a major new AI or large language model,
       a significant capability jump, or a broadly important model release.

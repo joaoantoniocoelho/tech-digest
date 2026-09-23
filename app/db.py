@@ -463,7 +463,7 @@ def record_processing_error(
 def get_digest_candidates(
     lookback_hours: int,
     minimum_score: int,
-    maximum_articles: int,
+    maximum_articles: int | None = None,
 ):
     cutoff = (
         datetime.now(timezone.utc)
@@ -481,6 +481,7 @@ def get_digest_candidates(
                 title,
                 url,
                 published_at,
+                feed_excerpt,
                 relevance_score,
                 why_interesting,
                 topics,
@@ -494,7 +495,8 @@ def get_digest_candidates(
               AND relevance_score >= ?
             ORDER BY
                 relevance_score DESC,
-                discovered_at DESC
+                discovered_at DESC,
+                id DESC
             """,
             (
                 minimum_score,
@@ -534,6 +536,7 @@ def get_digest_candidates(
                 "published_at": (
                     row["published_at"]
                 ),
+                "feed_excerpt": row["feed_excerpt"],
                 "relevance_score": (
                     row[
                         "relevance_score"
@@ -564,8 +567,8 @@ def get_digest_candidates(
         )
 
         if (
-            len(articles)
-            >= maximum_articles
+            maximum_articles is not None
+            and len(articles) >= maximum_articles
         ):
             break
 

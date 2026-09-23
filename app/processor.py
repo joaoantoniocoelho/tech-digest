@@ -7,6 +7,7 @@ from app.classifier import (
 )
 from app.content import fetch_article_content
 from app.db import (
+    get_connection,
     record_processing_error,
     save_classification,
 )
@@ -14,7 +15,7 @@ from app.scoring import calculate_relevance_score
 
 
 MAX_PROCESSING_ATTEMPTS = 3
-MIN_FEED_EXCERPT_LENGTH = 200
+MIN_FEED_EXCERPT_LENGTH = 100
 
 MAX_CLASSIFICATION_CONTENT_LENGTH = 25000
 CLASSIFICATION_CONTENT_HEAD_LENGTH = 20000
@@ -32,6 +33,35 @@ def _sanitize_error(error: Exception) -> str:
         text = text.replace(api_key, "[redacted]")
 
     return text
+
+
+def _stored_processing_attempts(article_id: int) -> int:
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT processing_attempts
+            FROM articles
+            WHERE id = ?
+            """,
+            (article_id,),
+        ).fetchone()
+
+    if row is None:
+        return 0
+
+    return row["processing_attempts"]
+
+
+def _metadata_only_classification_content(
+    article: dict,
+) -> str:
+    return (
+        "Full article content is unavailable.\n"
+        "Only the title and URL may be used as evidence.\n"
+        "Classification must be conservative.\n"
+        "Do not infer unsupported details.\n"
+        f"URL: {article['url']}"
+    )
 
 
 def _get_fallback_content(article):
@@ -172,20 +202,39 @@ def _process_article(
                 )
 
             else:
-                print(
-                    "Content unavailable. "
-                    "No usable RSS excerpt."
-                )
+                if (
+                    _stored_processing_attempts(
+                        article["id"]
+                    )
+                    >= 1
+                ):
+                    print(
+                        "Article content unavailable "
+                        "after retry; using title/URL "
+                        "metadata only"
+                    )
 
-                _record_failure(
-                    article_id=article["id"],
-                    error=(
-                        "Could not extract article content "
-                        "and no usable RSS excerpt was available"
-                    ),
-                )
+                    content = (
+                        _metadata_only_classification_content(
+                            article
+                        )
+                    )
 
-                return False
+                else:
+                    print(
+                        "Content unavailable. "
+                        "No usable RSS excerpt."
+                    )
+
+                    _record_failure(
+                        article_id=article["id"],
+                        error=(
+                            "Could not extract article content "
+                            "and no usable RSS excerpt was available"
+                        ),
+                    )
+
+                    return False
 
         classification_content = (
             _prepare_classification_content(
