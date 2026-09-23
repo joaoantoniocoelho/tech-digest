@@ -1,5 +1,7 @@
 import json
+import os
 import sqlite3
+from contextlib import contextmanager
 from datetime import (
     datetime,
     timedelta,
@@ -9,9 +11,22 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 
-DB_PATH = Path("data/digest.db")
+def _resolve_db_path() -> Path:
+    configured = os.getenv(
+        "DIGEST_DB_PATH",
+        "",
+    ).strip()
+
+    if configured:
+        return Path(configured)
+
+    return Path("data/digest.db")
 
 
+DB_PATH = _resolve_db_path()
+
+
+@contextmanager
 def get_connection():
     DB_PATH.parent.mkdir(
         parents=True,
@@ -19,14 +34,33 @@ def get_connection():
     )
 
     connection = sqlite3.connect(
-        DB_PATH
+        DB_PATH,
+        timeout=30,
     )
 
     connection.row_factory = (
         sqlite3.Row
     )
 
-    return connection
+    connection.execute(
+        "PRAGMA journal_mode=WAL"
+    )
+    connection.execute(
+        "PRAGMA busy_timeout=30000"
+    )
+    connection.execute(
+        "PRAGMA foreign_keys=ON"
+    )
+    connection.commit()
+
+    try:
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def init_db():
@@ -100,6 +134,42 @@ def init_db():
                 connection.execute(
                     migration
                 )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS subscribers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL,
+                subscribed_at TEXT NOT NULL,
+                unsubscribed_at TEXT,
+                unsubscribe_token TEXT NOT NULL UNIQUE
+            )
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pipeline_lock (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                job TEXT NOT NULL,
+                owner TEXT NOT NULL,
+                acquired_at TEXT NOT NULL,
+                heartbeat_at TEXT NOT NULL
+            )
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS job_runs (
+                slot TEXT PRIMARY KEY,
+                job TEXT NOT NULL,
+                status TEXT NOT NULL,
+                finished_at TEXT NOT NULL
+            )
+            """
+        )
 
 
 def save_article(article: dict) -> bool:

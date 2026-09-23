@@ -33,11 +33,11 @@ The next work is operational rather than architectural:
 - add or remove sources based on actual usefulness;
 - notice repeated stories across publications.
 
-Keep the system a short-lived cron job on SQLite. Classification remains a sequential TypeSafe API call per article.
+Production is one Railway service: the HTTP API and scheduler share one SQLite file on a persistent volume. Classification remains a sequential TypeSafe API call per article.
 
 ## Public Newsletter
 
-A possible future direction is turning the personal digest into a public newsletter.
+The public digest is the same edition for every subscriber. Signup is `POST /subscribe` with no account, confirmation email, or per-person preferences.
 
 The public version should still avoid reproducing original article content.
 

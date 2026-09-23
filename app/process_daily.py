@@ -5,6 +5,7 @@ from app.db import (
     init_db,
 )
 from app.digest import get_processing_lookback_hours
+from app.log import log_event
 from app.processor import process_articles
 
 
@@ -41,11 +42,17 @@ def process_daily() -> dict:
         "Failed/retrying: "
         f"{summary['failed']}"
     )
+    log_event(
+        "process_daily",
+        eligible=len(articles),
+        processed=summary["processed"],
+        failed=summary["failed"],
+    )
 
     return summary
 
 
-def main():
+def run_process_job() -> dict:
     started_at = datetime.now().astimezone()
 
     print()
@@ -56,7 +63,7 @@ def main():
     )
     print("=" * 60)
 
-    process_daily()
+    summary = process_daily()
 
     finished_at = datetime.now().astimezone()
 
@@ -67,6 +74,14 @@ def main():
         f"{finished_at.isoformat(timespec='seconds')}"
     )
     print("=" * 60)
+
+    return summary
+
+
+def main():
+    from app.pipeline import run_cli
+
+    run_cli("process")
 
 
 if __name__ == "__main__":

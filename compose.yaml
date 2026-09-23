@@ -1,12 +1,24 @@
+x-local: &local
+  volumes:
+    - ./data:/app/data
+  env_file:
+    - .env
+  environment:
+    PORT: "8080"
+    TZ: America/Sao_Paulo
+    DIGEST_DB_PATH: /app/data/dev.db
+    PUBLIC_BASE_URL: http://127.0.0.1:8080
+  restart: "no"
+
 services:
   digest:
+    <<: *local
     build: .
+    command: ["python", "-m", "app.main"]
     container_name: tech-digest
 
-    volumes:
-      - ./data:/app/data
-
-    env_file:
-      - .env
-
-    restart: "no"
+  api:
+    <<: *local
+    build: .
+    ports:
+      - "8080:8080"

@@ -41,7 +41,7 @@ The original article remains the destination.
 
 ### Self-hosted pipeline, cloud classifier
 
-Collection, storage, scoring, and delivery run on my home server.
+Collection, storage, scoring, and delivery run in one service. Locally that can be Docker Compose. In production it is a single Railway service with SQLite on a persistent volume.
 
 Article text is sent to the TypeSafe API for classification. Titles and short RSS excerpts are sent for digest duplicate checks. Full article content is not persisted in the local SQLite database. This project does not make claims about TypeSafe's own retention.
 
@@ -129,12 +129,17 @@ The extracted article text exists only during processing and is discarded afterw
 
 ## Configuration
 
-Set these in `.env` (see [Operations](docs/operations.md)):
+Set these in `.env` (see `.env.example` and [Operations](docs/operations.md)):
 
-- `RESEND_API_KEY` and `RESEND_TO` for email delivery;
+- `RESEND_API_KEY` for email delivery;
 - optional `RESEND_FROM` (default `Tech Digest <digest@digest.joaoac.com>`);
 - `TYPESAFE_API_KEY` (required for classification and digest duplicate checks);
-- optional `TYPESAFE_MODEL` (default `jev-1.13.0`).
+- optional `TYPESAFE_MODEL` (default `jev-1.13.0`);
+- `PUBLIC_BASE_URL` for unsubscribe links;
+- optional `DIGEST_DB_PATH` (default `data/digest.db`);
+- optional `DIGEST_JOB_TOKEN` to enable `POST /jobs/collect`, `/jobs/process`, and `/jobs/send`.
+
+Digest recipients are rows in `subscribers`, not `RESEND_TO`.
 
 Docker Compose loads `.env` automatically. A local Python shell does not, so export the same variables before `process_daily`, `send_digest`, or `debug_classification`.
 
@@ -197,6 +202,7 @@ tech-digest/
 │
 ├── Dockerfile
 ├── compose.yaml
+├── railway.toml
 ├── requirements.txt
 └── README.md
 ```
@@ -271,36 +277,81 @@ Send the digest by email:
 python -m app.send_digest
 ```
 
-## Running with Docker
+## Local end-to-end test
 
-Build:
+Docker is enough. You do not need the virtualenv or a host Python. Compose starts the API and stores SQLite at `data/dev.db` on your machine. There is no separate database container. `data/digest.db` is left untouched.
+
+`.env` still has to contain `TYPESAFE_API_KEY` and `RESEND_API_KEY`. Compose loads that file, then forces the dev database and `PUBLIC_BASE_URL=http://127.0.0.1:8080`.
+
+Start the API:
 
 ```bash
-docker compose build
+docker compose up --build api
 ```
 
-Collect feeds:
+In another terminal, register the address that should receive the test:
+
+```bash
+curl -s -X POST http://127.0.0.1:8080/subscribe \
+  -H 'content-type: application/json' \
+  -d '{"email":"you@example.com"}'
+```
+
+Run the pipeline inside that same container:
+
+```bash
+docker compose exec api python -m app.main
+docker compose exec api python -m app.process_daily
+docker compose exec api python -m app.digest
+docker compose exec api python -m app.send_digest
+```
+
+Classification calls the TypeSafe API. `app.digest` only prints the edition. `app.send_digest` sends a real email when there is an active subscriber and at least one article from the last 24 hours with a score of at least 60 that has not been delivered yet.
+
+Stop the API before deleting the dev database, then start it again:
+
+```bash
+docker compose stop api
+rm -f data/dev.db data/dev.db-wal data/dev.db-shm
+docker compose up api
+```
+
+The next start creates an empty database. Subscribe again after that. `data/digest.db` stays as it was.
+
+The same dev database is used by one-shot commands:
 
 ```bash
 docker compose run --rm digest
-```
-
-Classify the daily window:
-
-```bash
 docker compose run --rm digest python -m app.process_daily
-```
-
-Preview or send the digest:
-
-```bash
 docker compose run --rm digest python -m app.digest
 docker compose run --rm digest python -m app.send_digest
 ```
 
-The SQLite database is persisted outside the container through the `data/` directory.
+### Without Docker
 
-Compose reads `.env` and does not use host networking. Classification needs outbound HTTPS to `api.typesafe.ai`; there is no local Ollama sidecar.
+Activate the virtualenv. A bare `python3` on macOS is often Python 3.9 and does not have the project dependencies.
+
+```bash
+source .venv/bin/activate
+set -a && source .env && set +a
+export DIGEST_DB_PATH=data/dev.db
+export PUBLIC_BASE_URL=http://127.0.0.1:8080
+```
+
+```bash
+python -c "
+from app.db import init_db
+from app.subscribers import subscribe_email
+init_db()
+subscribe_email('you@example.com')
+"
+python -m app.main
+python -m app.process_daily
+python -m app.digest
+python -m app.send_digest
+```
+
+Clear that same file with `rm -f data/dev.db data/dev.db-wal data/dev.db-shm`.
 
 ## Documentation
 

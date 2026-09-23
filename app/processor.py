@@ -1,4 +1,3 @@
-import os
 import yaml
 
 from app.classifier import (
@@ -23,16 +22,11 @@ CLASSIFICATION_CONTENT_TAIL_LENGTH = 5000
 
 
 def _sanitize_error(error: Exception) -> str:
-    text = f"{type(error).__name__}: {error}"
-    api_key = os.environ.get(
-        "TYPESAFE_API_KEY",
-        "",
-    ).strip()
+    from app.log import redact_text
 
-    if api_key:
-        text = text.replace(api_key, "[redacted]")
-
-    return text
+    return redact_text(
+        f"{type(error).__name__}: {error}"
+    )
 
 
 def _stored_processing_attempts(article_id: int) -> int:

@@ -226,6 +226,7 @@ def render_html_digest(
     show_score: bool = False,
     show_topics: bool = False,
     sent_at: datetime | None = None,
+    unsubscribe_url: str | None = None,
 ) -> str:
     sent_at = sent_at or datetime.now().astimezone()
     articles = digest.get("articles") or []
@@ -235,6 +236,16 @@ def render_html_digest(
     preheader = f"{count_label} from the last {lookback_hours} hours"
     lede = f"Best articles from the last {lookback_hours} hours"
     date_label = _format_calendar_date(sent_at, with_weekday=True)
+
+    unsubscribe_html = ""
+    if unsubscribe_url:
+        unsubscribe_html = (
+            '<p class="ibm-plex-sans" style="margin:12px 0 0;'
+            f'{_sans()}font-size:13px;line-height:21px;color:#a1a1aa;">'
+            f'<a href="{_esc(unsubscribe_url)}" '
+            'style="color:#a1a1aa;text-decoration:underline;">'
+            "Unsubscribe</a></p>"
+        )
 
     if articles:
         article_rows = "\n".join(
@@ -296,6 +307,7 @@ u + .body .gmail-blend-difference {{ background:#000000; mix-blend-mode:differen
 &nbsp; · &nbsp;
 <a href="https://joaoac.com" style="color:#fde68a;text-decoration:underline;">Website</a>
 </p>
+{unsubscribe_html}
 </td></tr></table>
 </div></div>
 </td></tr></table>

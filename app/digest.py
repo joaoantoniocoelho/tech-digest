@@ -7,6 +7,7 @@ from app.db import (
     get_digest_candidates,
     init_db,
 )
+from app.log import log_event
 
 
 CONFIG_PATH = Path("config/digest.yaml")
@@ -43,6 +44,8 @@ def build_digest() -> dict:
     )
 
     articles = []
+    skipped_title = 0
+    skipped_semantic = 0
 
     for candidate in candidates:
         if len(articles) >= maximum_articles:
@@ -54,12 +57,22 @@ def build_digest() -> dict:
             title == " ".join(article["title"].split()).casefold()
             for article in articles
         ):
+            skipped_title += 1
             continue
 
         if articles and is_duplicate_story(candidate, articles):
+            skipped_semantic += 1
             continue
 
         articles.append(candidate)
+
+    log_event(
+        "digest_build",
+        candidates=len(candidates),
+        selected=len(articles),
+        skipped_title=skipped_title,
+        skipped_semantic=skipped_semantic,
+    )
 
     return {
         "lookback_hours": lookback_hours,
@@ -72,6 +85,7 @@ def render_text_digest(
     digest: dict,
     show_score: bool = True,
     show_topics: bool = True,
+    unsubscribe_url: str | None = None,
 ) -> str:
     articles = digest["articles"]
     lookback_hours = digest["lookback_hours"]
@@ -86,6 +100,9 @@ def render_text_digest(
         lines.append(
             "No articles passed the relevance threshold."
         )
+        if unsubscribe_url:
+            lines.append("")
+            lines.append(f"Unsubscribe: {unsubscribe_url}")
 
         return "\n".join(lines)
 
@@ -137,6 +154,10 @@ def render_text_digest(
             lines.append("")
             lines.append("-" * 60)
             lines.append("")
+
+    if unsubscribe_url:
+        lines.append("")
+        lines.append(f"Unsubscribe: {unsubscribe_url}")
 
     return "\n".join(lines)
 

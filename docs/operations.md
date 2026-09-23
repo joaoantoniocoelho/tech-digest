@@ -76,10 +76,10 @@ Set in `.env`:
 
 ```text
 RESEND_API_KEY=...
-RESEND_TO=joaoantonioscoelho@gmail.com
+PUBLIC_BASE_URL=http://127.0.0.1:8080
 ```
 
-The sender defaults to `Tech Digest <digest@digest.joaoac.com>`. Override it with `RESEND_FROM` if needed. `app/telegram.py` stays in the project, and `send_digest` does not call it.
+The sender defaults to `Tech Digest <digest@digest.joaoac.com>`. Override it with `RESEND_FROM` if needed. Recipients are active rows in `subscribers`. `RESEND_TO` is not used for the digest. `app/telegram.py` stays in the project, and `send_digest` does not call it.
 
 ## Run with Docker
 
@@ -108,7 +108,13 @@ docker compose run --rm digest python -m app.digest
 docker compose run --rm digest python -m app.send_digest
 ```
 
-Compose reads `.env` and uses normal Docker networking. Classification needs outbound HTTPS to `api.typesafe.ai`. There is no local Ollama service and no `network_mode: host`.
+Compose reads `.env` and uses normal Docker networking. Local Compose stores SQLite at `data/dev.db` (`DIGEST_DB_PATH=/app/data/dev.db` inside the container) and does not open `data/digest.db`. Classification needs outbound HTTPS to `api.typesafe.ai`. There is no local Ollama service and no `network_mode: host`.
+
+The long-running API is:
+
+```bash
+docker compose up api
+```
 
 ## Tests
 
@@ -146,9 +152,9 @@ SQLite database:
 data/digest.db
 ```
 
-The database is persisted on the host.
+Override the path with `DIGEST_DB_PATH`. Production sets that variable to the file on the Railway volume.
 
-It is not included in Git.
+The database is not included in Git.
 
 ## Logs
 
@@ -192,28 +198,27 @@ Feature logs use readable labels (`Direct:`, `Related:`, `Penalties:`, `Why:`), 
 
 Logs should not contain full article content. If `TYPESAFE_API_KEY` appears in an exception, it is replaced with `[redacted]`.
 
-## Cron
+## Schedule
 
-View configured jobs:
+Production runs the schedule inside the API process, in `America/Sao_Paulo`:
+
+```text
+collect   00:00, 04:00, 08:00, 12:00, 16:00, 20:00, and 06:45
+process   06:50
+send      07:00
+```
+
+Logs use lines such as `event=job_start` and `event=job_finish`. A failure in one job does not stop the API.
+
+Local one-shot commands remain:
 
 ```bash
-crontab -l
+python -m app.main
+python -m app.process_daily
+python -m app.send_digest
 ```
 
-Recommended schedule:
-
-```cron
-# Collect RSS metadata every 4 hours.
-0 */4 * * * cd /home/joaoac/tech-digest && /usr/bin/docker compose run --rm digest >> logs/collector.log 2>&1
-
-# Classify every eligible article from the daily window at 06:00.
-0 6 * * * cd /home/joaoac/tech-digest && /usr/bin/docker compose run --rm digest python -m app.process_daily >> logs/processor.log 2>&1
-
-# Send the digest at 07:00.
-0 7 * * * cd /home/joaoac/tech-digest && /usr/bin/docker compose run --rm digest python -m app.send_digest >> logs/digest.log 2>&1
-```
-
-Do not point the collector cron job at the daily processor. Collection should stay cheap and independent of classification.
+Those commands take the same lock as the scheduler. If a job is already running, they exit without starting a second one.
 
 ## TypeSafe / Jev
 

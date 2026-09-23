@@ -1,7 +1,9 @@
 import os
 import runpy
 import unittest
+from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
+from io import StringIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -104,6 +106,7 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
         self.assertIn('href="https://x.com/joaoac_dev"', html)
         self.assertIn('href="https://joaoac.com"', html)
         self.assertIn("original publisher", html)
+        self.assertNotIn("Unsubscribe", html)
 
     def test_gmail_mobile_dark_mode_has_contrast_workaround(self):
         html = render_html_digest(
@@ -334,27 +337,50 @@ class SendDailyDigestTestCase(unittest.TestCase):
             "published_at": None,
         }
 
+    def _subscriber(self, email, token):
+        return {
+            "id": 1,
+            "email": email,
+            "unsubscribe_token": token,
+        }
+
+    def _digest(self):
+        return {
+            "lookback_hours": 24,
+            "articles": [self._article()],
+        }
+
     @patch("app.send_digest.mark_articles_delivered")
     @patch("app.send_digest.send_email")
+    @patch("app.send_digest.list_active_subscribers")
     @patch("app.send_digest.build_digest")
     def test_delivery_uses_email(
         self,
         build_digest,
+        subscribers,
         send_email_mock,
         mark,
     ):
-        build_digest.return_value = {
-            "lookback_hours": 24,
-            "articles": [self._article()],
-        }
+        build_digest.return_value = self._digest()
+        subscribers.return_value = [
+            self._subscriber(
+                "reader@example.com",
+                "token-reader-1",
+            )
+        ]
         send_email_mock.return_value = {
             "id": "email_1"
         }
 
-        send_daily_digest()
+        with patch.dict(
+            os.environ,
+            {"PUBLIC_BASE_URL": "https://api.digest.joaoac.com"},
+        ):
+            send_daily_digest()
 
         send_email_mock.assert_called_once()
         kwargs = send_email_mock.call_args.kwargs
+        self.assertEqual(kwargs["to"], ["reader@example.com"])
         self.assertTrue(
             kwargs["subject"].startswith(
                 "Tech Digest — "
@@ -363,7 +389,15 @@ class SendDailyDigestTestCase(unittest.TestCase):
         self.assertIn("Example", kwargs["html_body"])
         self.assertIn("João Coelho", kwargs["html_body"])
         self.assertIn(
+            "https://api.digest.joaoac.com/unsubscribe/token-reader-1",
+            kwargs["html_body"],
+        )
+        self.assertIn(
             "Why: AI agents",
+            kwargs["text"],
+        )
+        self.assertIn(
+            "Unsubscribe: https://api.digest.joaoac.com/unsubscribe/token-reader-1",
             kwargs["text"],
         )
         mark.assert_called_once_with(
@@ -372,24 +406,126 @@ class SendDailyDigestTestCase(unittest.TestCase):
 
     @patch("app.send_digest.mark_articles_delivered")
     @patch("app.send_digest.send_email")
+    @patch("app.send_digest.list_active_subscribers")
     @patch("app.send_digest.build_digest")
     def test_failed_send_does_not_mark_delivered(
         self,
         build_digest,
+        subscribers,
         send_email_mock,
         mark,
     ):
-        build_digest.return_value = {
-            "lookback_hours": 24,
-            "articles": [self._article()],
-        }
+        build_digest.return_value = self._digest()
+        subscribers.return_value = [
+            self._subscriber("reader@example.com", "token-reader-1")
+        ]
         send_email_mock.side_effect = RuntimeError(
             "Resend API error (401): invalid"
         )
 
-        with self.assertRaises(RuntimeError):
-            send_daily_digest()
+        with patch.dict(
+            os.environ,
+            {"PUBLIC_BASE_URL": "https://api.digest.joaoac.com"},
+        ):
+            with self.assertRaises(RuntimeError):
+                send_daily_digest()
 
+        mark.assert_not_called()
+
+    @patch("app.send_digest.mark_articles_delivered")
+    @patch("app.send_digest.send_email")
+    @patch("app.send_digest.list_active_subscribers")
+    @patch("app.send_digest.build_digest")
+    def test_one_recipient_failure_does_not_block_others(
+        self,
+        build_digest,
+        subscribers,
+        send_email_mock,
+        mark,
+    ):
+        build_digest.return_value = self._digest()
+        subscribers.return_value = [
+            self._subscriber("one@example.com", "token-one-aaaa"),
+            self._subscriber("two@example.com", "token-two-bbbb"),
+        ]
+        send_email_mock.side_effect = [
+            RuntimeError("Resend API error (422): bad one@example.com"),
+            {"id": "email_2"},
+        ]
+
+        with patch.dict(
+            os.environ,
+            {"PUBLIC_BASE_URL": "https://api.digest.joaoac.com"},
+        ):
+            with redirect_stdout(StringIO()) as output:
+                send_daily_digest()
+
+        self.assertEqual(send_email_mock.call_count, 2)
+        first = send_email_mock.call_args_list[0].kwargs
+        second = send_email_mock.call_args_list[1].kwargs
+        self.assertEqual(first["to"], ["one@example.com"])
+        self.assertEqual(second["to"], ["two@example.com"])
+        self.assertIn("token-one-aaaa", first["html_body"])
+        self.assertIn("token-two-bbbb", second["html_body"])
+        self.assertNotIn("two@example.com", first["html_body"])
+        self.assertNotIn("one@example.com", second["html_body"])
+        mark.assert_called_once_with(article_ids=[7])
+        logged = output.getvalue()
+        self.assertNotIn("token-one-aaaa", logged)
+        self.assertNotIn("token-two-bbbb", logged)
+        self.assertNotIn("one@example.com", logged)
+        self.assertIn("o***@example.com", logged)
+        self.assertIn("t***@example.com", logged)
+
+    @patch("app.send_digest.mark_articles_delivered")
+    @patch("app.send_digest.send_email")
+    @patch("app.send_digest.list_active_subscribers")
+    @patch("app.send_digest.build_digest")
+    def test_all_recipient_failures_do_not_mark_delivered(
+        self,
+        build_digest,
+        subscribers,
+        send_email_mock,
+        mark,
+    ):
+        build_digest.return_value = self._digest()
+        subscribers.return_value = [
+            self._subscriber("one@example.com", "token-one-aaaa"),
+            self._subscriber("two@example.com", "token-two-bbbb"),
+        ]
+        send_email_mock.side_effect = RuntimeError("Resend down")
+
+        with patch.dict(
+            os.environ,
+            {"PUBLIC_BASE_URL": "https://api.digest.joaoac.com"},
+        ):
+            with self.assertRaises(RuntimeError):
+                send_daily_digest()
+
+        self.assertEqual(send_email_mock.call_count, 2)
+        mark.assert_not_called()
+
+    @patch("app.send_digest.mark_articles_delivered")
+    @patch("app.send_digest.send_email")
+    @patch("app.send_digest.list_active_subscribers")
+    @patch("app.send_digest.build_digest")
+    def test_zero_subscribers_does_not_fail(
+        self,
+        build_digest,
+        subscribers,
+        send_email_mock,
+        mark,
+    ):
+        build_digest.return_value = self._digest()
+        subscribers.return_value = []
+
+        with redirect_stdout(StringIO()) as output:
+            result = send_daily_digest()
+
+        self.assertEqual(result["sent"], 0)
+        self.assertEqual(result["subscribers"], 0)
+        self.assertIn("No active subscribers", output.getvalue())
+        send_email_mock.assert_not_called()
         mark.assert_not_called()
 
     @patch("app.send_digest.mark_articles_delivered")

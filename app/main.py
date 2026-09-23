@@ -4,6 +4,7 @@ from pathlib import Path
 import yaml
 
 from app.db import init_db, save_article
+from app.log import log_event
 from app.rss import fetch_feed
 
 
@@ -45,11 +46,12 @@ def collect_feeds() -> int:
 
     print()
     print(f"Collection complete: {total_new} new articles")
+    log_event("collect_feeds", new_articles=total_new)
 
     return total_new
 
 
-def main():
+def run_collect() -> dict:
     started_at = datetime.now().astimezone()
 
     print()
@@ -58,7 +60,7 @@ def main():
     print("=" * 60)
 
     init_db()
-    collect_feeds()
+    total_new = collect_feeds()
 
     finished_at = datetime.now().astimezone()
 
@@ -66,6 +68,14 @@ def main():
     print("=" * 60)
     print(f"Run finished at: {finished_at.isoformat(timespec='seconds')}")
     print("=" * 60)
+
+    return {"new_articles": total_new}
+
+
+def main():
+    from app.pipeline import run_cli
+
+    run_cli("collect")
 
 
 if __name__ == "__main__":

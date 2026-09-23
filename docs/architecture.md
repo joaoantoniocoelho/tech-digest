@@ -318,43 +318,42 @@ The digest selects recent classified articles that:
 
 Each item is a compact Why line of at most three positive feature labels. Scores and topic lists are hidden in the email by default (`show_score` / `show_topics` in `config/digest.yaml`).
 
-Delivery goes through Resend (`digest.joaoac.com`). Articles are marked delivered only after a successful send. The Telegram sender remains in the tree, and `send_digest` does not call it.
+Delivery goes through Resend (`digest.joaoac.com`). The digest is built once, then sent separately to each active subscriber with that subscriber's unsubscribe link. Articles are marked delivered when at least one send succeeds. The Telegram sender remains in the tree, and `send_digest` does not call it.
+
+Subscribers live in the same SQLite database (`subscribers`). `POST /subscribe` activates an address, including one that had unsubscribed. `GET /unsubscribe/<token>` only shows a confirmation page; `POST` performs the unsubscribe, so mail clients that prefetch links do not remove people.
 
 ## Docker
 
-The application is packaged using Docker.
+The production image is a long-running process: HTTP API and in-process scheduler in one container (`python -m app.server`).
 
-The application container is intentionally short-lived.
+Local Compose still runs one-shot jobs. The `digest` service overrides the image command to `python -m app.main`. The `api` service uses the production command.
 
-It performs a task and exits instead of remaining online as a long-running service.
-
-Persistent data stays on the host:
+Persistent data:
 
 ```text
-./data:/app/data
+local Compose: ./data:/app/data
+production:    DIGEST_DB_PATH, mounted volume
 ```
 
-Compose loads `.env` (`TYPESAFE_API_KEY`, optional `TYPESAFE_MODEL`) and uses normal Docker networking. It does not use `network_mode: host` and does not talk to a local Ollama instance.
+The database path is `DIGEST_DB_PATH`. It defaults to `data/digest.db`.
 
-Classification requires outbound HTTPS to `api.typesafe.ai`. Processor logs redact `TYPESAFE_API_KEY` if it appears in an error.
+Compose loads `.env` and uses normal Docker networking. It does not use `network_mode: host` and does not talk to a local Ollama instance.
+
+Classification requires outbound HTTPS to `api.typesafe.ai`. Logs redact API keys, job tokens, email addresses, and unsubscribe tokens.
 
 ## Scheduling
 
-Scheduling stays on the host cron service. The application itself is not a daemon.
+Production does not use host cron or a second Railway service. A scheduler thread inside the API process runs in `America/Sao_Paulo`:
 
-Recommended cadence:
-
-```cron
-# Collect RSS metadata every 4 hours.
-0 */4 * * * cd /home/joaoac/tech-digest && /usr/bin/docker compose run --rm digest >> logs/collector.log 2>&1
-
-# Classify every eligible article from the daily window at 06:00.
-0 6 * * * cd /home/joaoac/tech-digest && /usr/bin/docker compose run --rm digest python -m app.process_daily >> logs/processor.log 2>&1
-
-# Send the digest at 07:00.
-0 7 * * * cd /home/joaoac/tech-digest && /usr/bin/docker compose run --rm digest python -m app.send_digest >> logs/digest.log 2>&1
+```text
+collect   every 4 hours at minute 00 (00:00, 04:00, 08:00, 12:00, 16:00, 20:00)
+collect   06:45
+process   06:50
+send      07:00
 ```
+
+A missed slot still runs if the process is up within 30 minutes for collection, or within 3 hours for processing and sending. Slots run in time order, so the 06:45 collection finishes before processing starts when both are due. A SQLite lock stops a second collect, process, or send from running at the same time. A job error is logged and does not stop the API.
 
 Collection does not call the classifier.
 
-Classification and digest delivery are separate jobs so a slow classification run cannot block feed collection.
+Classification and digest delivery stay separate jobs, so a slow classification run cannot block feed collection. It can delay the 07:00 send until the lock is free.
