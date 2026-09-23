@@ -107,6 +107,7 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
         self.assertIn("font-optical-sizing:auto", html)
         self.assertNotIn("border-radius:", html)
         self.assertNotIn("mix-blend-mode", html)
+        self.assertIn("João Coelho Tech Digest", html)
         self.assertIn("João Coelho", html)
         self.assertIn("Tuesday, Sep 22, 2026", html)
         self.assertIn("1 article · last 24 hours", html)
@@ -201,7 +202,7 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
     def test_subject_uses_send_date(self):
         self.assertEqual(
             digest_subject(SENT_AT),
-            "Tech Digest — Sep 22, 2026",
+            "João Coelho Tech Digest — Sep 22, 2026",
         )
 
 
@@ -400,7 +401,7 @@ class SendDailyDigestTestCase(unittest.TestCase):
         self.assertEqual(kwargs["to"], ["reader@example.com"])
         self.assertTrue(
             kwargs["subject"].startswith(
-                "Tech Digest — "
+                "João Coelho Tech Digest — "
             )
         )
         self.assertIn("Example", kwargs["html_body"])

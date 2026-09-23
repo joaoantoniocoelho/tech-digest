@@ -10,7 +10,7 @@ from app.db import _parse_article_datetime
 RESEND_API_URL = "https://api.resend.com/emails"
 RESEND_TIMEOUT_SECONDS = 15.0
 DEFAULT_FROM = (
-    "Tech Digest <digest@digest.joaoac.com>"
+    "João Coelho Tech Digest <digest@digest.joaoac.com>"
 )
 
 FONT_SANS = "'IBM Plex Sans', sans-serif"
@@ -130,7 +130,7 @@ def digest_subject(
     )
 
     return (
-        "Tech Digest — "
+        "João Coelho Tech Digest — "
         + _format_calendar_date(sent_at)
     )
 
@@ -273,7 +273,7 @@ def render_html_digest(
   .dm-hair {{ border-color:#262626 !important; }}
 }}
 </style>
-<title>Tech Digest</title>
+<title>João Coelho Tech Digest</title>
 </head>
 <body class="body dm-bg dm-fg ibm-plex-sans" bgcolor="#f4f4f5" style="margin:0;padding:0;background-color:#f4f4f5;color:#000000;">
 <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">{_esc(preheader)}</div>
@@ -281,7 +281,7 @@ def render_html_digest(
 <tr><td align="center" class="dm-bg" bgcolor="#f4f4f5" style="background-color:#f4f4f5;">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" class="dm-bg" bgcolor="#f4f4f5" style="width:100%;max-width:560px;background-color:#f4f4f5;">
 <tr><td class="dm-bg" bgcolor="#f4f4f5" style="padding:40px 28px 36px;background-color:#f4f4f5;color:#000000;">
-<p class="ibm-plex-mono dm-brand" style="margin:0 0 22px;{_mono()}font-size:12px;line-height:16px;letter-spacing:0.14em;color:#4a8aa8;">TECH DIGEST</p>
+<p class="ibm-plex-mono dm-brand" style="margin:0 0 22px;{_mono()}font-size:12px;line-height:16px;letter-spacing:0.08em;color:#4a8aa8;">João Coelho Tech Digest</p>
 <h1 class="ibm-plex-sans dm-fg" style="margin:0 0 6px;{_sans(500)}font-size:22px;line-height:30px;color:#000000;">{_esc(date_label)}</h1>
 <p class="ibm-plex-mono dm-meta" style="margin:0 0 28px;{_mono()}font-size:13px;line-height:20px;color:#262626;">{_esc(edition)}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #4a8aa8;">

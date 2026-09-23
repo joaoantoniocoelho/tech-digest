@@ -91,7 +91,7 @@ def render_text_digest(
     lookback_hours = digest["lookback_hours"]
 
     lines = [
-        "Tech Digest",
+        "João Coelho Tech Digest",
         f"Best articles from the last {lookback_hours} hours",
         "",
     ]
