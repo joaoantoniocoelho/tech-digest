@@ -1,8 +1,8 @@
 # Tech Digest
 
-A self-hosted personal technology news filter with cloud-assisted classification.
+A daily technology digest powered by AI classification, deterministic ranking, and semantic deduplication.
 
-Tech Digest collects articles from RSS and Atom feeds, sends article text to [TypeSafe Jev](https://typesafe.ai) for structured classification, and assigns a personalized relevance score based on my interests.
+Tech Digest collects articles from selected technology sources, uses [TypeSafe Jev](https://typesafe.ai) for structured classification, ranks them against an explicit interest profile, removes repeated coverage of the same stories, and delivers a concise daily edition by email.
 
 The goal is not to summarize the internet.
 
@@ -10,21 +10,23 @@ The goal is to answer a much simpler question:
 
 > Which links are actually worth opening?
 
+Public site: [digest.joaoac.com](https://digest.joaoac.com)
+
 ## Goals
 
 Tech Digest is designed to:
 
-- collect technology articles automatically during the day;
-- classify every recent article once per day;
-- avoid showing the same article twice;
-- extract article content only temporarily;
-- classify articles with TypeSafe Jev (typed Score decisions);
-- rank articles based on a personal interest profile;
+- collect technology articles automatically throughout the day;
+- classify recent articles using structured model decisions;
+- rank them using deterministic scoring;
+- make major developments difficult to miss;
+- collapse repeated coverage of the same underlying story;
+- avoid republishing or permanently storing article content;
 - deliver a small daily digest by email.
 
 The final digest is intentionally lightweight.
 
-Each recommended article should contain roughly:
+Each recommended article contains roughly:
 
 ```text
 Article title
@@ -39,128 +41,289 @@ The original article remains the destination.
 
 ## Principles
 
-### Self-hosted pipeline, cloud classifier
+### AI where it helps, deterministic logic where it matters
 
-Collection, storage, scoring, and delivery run in one service. Locally that can be Docker Compose. In production it is a single Railway service with SQLite on a persistent volume.
+Jev is used for decisions that benefit from semantic understanding, such as:
 
-Article text is sent to the TypeSafe API for classification. Titles and short RSS excerpts are sent for digest duplicate checks. Full article content is not persisted in the local SQLite database. This project does not make claims about TypeSafe's own retention.
+- identifying which interests are present in an article;
+- evaluating article importance;
+- determining whether two articles cover the same underlying story.
 
-Email delivery uses the Resend API and the verified domain `digest.joaoac.com`.
+The final relevance score is not generated directly by the model.
+
+Instead, structured classification outputs are passed to deterministic Python scoring logic.
+
+This keeps ranking inspectable, reproducible, and easy to tune.
 
 ### Do not republish articles
 
-Full article text is used temporarily for classification and is not stored in the database.
+Full article text is used temporarily during classification and is not persisted in the database.
 
-The persisted output contains metadata and derived information such as:
+Persisted article data contains metadata and derived information such as:
 
 - relevance score;
 - topics;
-- why the article may be interesting (compact feature labels).
+- compact explanations of why the article is relevant;
+- processing and delivery state.
+
+Article content remains at the original publisher.
 
 ### Filter, do not summarize
 
-The system is primarily a reading filter.
+Tech Digest is primarily a reading filter.
 
-It should help reduce information overload instead of creating another large body of generated text.
+It is designed to reduce information overload instead of creating another large body of generated text.
 
-### Explainable ranking
+The output should make it easier to decide what deserves attention, not replace the original article.
 
-The classifier does not directly choose the final relevance score.
+### Explicit editorial behavior
 
-Instead:
+The system has an explicit interest profile rather than asking a model to decide vaguely whether something is "interesting."
 
-1. Jev assigns a feature strength and importance score for the article;
-2. deterministic Python code converts those features into a relevance score.
+Articles are classified against features such as:
 
-This makes ranking easier to inspect and tune.
+- major AI model developments;
+- AI agents;
+- software engineering;
+- developer tools;
+- security;
+- engineering culture;
+- technology business strategy;
+- AI research;
+- infrastructure;
+- privacy.
 
-## Current Architecture
+Feature definitions, weights, inclusion rules, exclusions, and selected score floors are stored in configuration and can be inspected directly.
+
+### One digest, one audience
+
+Tech Digest currently produces one shared daily edition.
+
+Subscribers do not receive individually personalized rankings.
+
+The editorial profile belongs to the digest itself, and every active subscriber receives the same final selection.
+
+## Architecture
 
 ```text
-RSS / Atom
-    |
-    |  every 4 hours
-    v
+Selected sources
+      |
+      |  periodic collection
+      v
 Feed Collector
-    |
-    v
+      |
+      v
 SQLite metadata
-    |
-    |  once per day
-    v
+      |
+      |  daily processing window
+      v
 Article URL
-    |
-    v
-HTTPX
-    |
-    v
-Trafilatura
-    |
-    v
+      |
+      v
+HTTPX + Trafilatura
+      |
+      |  RSS excerpt fallback when needed
+      v
 Temporary article text
-    |
-    v
-TypeSafe Jev (system_one)
-    |
-    v
-Feature Vector
-    |
-    v
-Python Scoring
-    |
-    v
-SQLite
-    |
-    |  once per day
-    v
-Ranked digest
-    |
-    v
-Email
+      |
+      v
+TypeSafe Jev
+      |
+      v
+Structured feature scores
+      |
+      v
+Deterministic Python scoring
+      |
+      v
+Ranked candidates
+      |
+      v
+Jev semantic deduplication
+      |
+      v
+Top 8
+      |
+      v
+HTML email
+      |
+      v
+Active subscribers
 ```
 
-Collection and classification are separate jobs.
+Collection, classification, ranking, deduplication, and delivery are separate responsibilities.
 
-The collector only stores article metadata. It does not call the classifier.
+The collector stores article metadata and RSS excerpts. It does not classify articles.
 
-Once per day, the processor classifies every unprocessed article in the recent publication window, sequentially.
+The daily processor selects eligible unprocessed articles from the configured publication window and classifies them sequentially.
 
-The extracted article text exists only during processing and is discarded afterward.
+Article text exists only during processing and is discarded afterward.
+
+The digest builder ranks eligible articles, considers a larger candidate pool, removes repeated coverage of the same stories, and fills the final edition with up to eight articles.
+
+## Classification
+
+Each article is evaluated using TypeSafe Jev `system_one`.
+
+Jev produces typed scores for the configured interests and for overall article importance.
+
+Feature strengths are discretized into:
+
+```text
+0 = does not meaningfully apply
+1 = explicitly present but secondary
+2 = central to the article
+```
+
+Importance is classified separately.
+
+The classifier is intentionally conservative:
+
+- features require direct evidence;
+- adjacent topics should not activate a feature;
+- uncertainty favors the lower strength;
+- article importance is independent from the interest profile.
+
+The result is a structured feature vector rather than free-form model-generated ranking.
+
+## Relevance Scoring
+
+Relevance is calculated deterministically in Python.
+
+The scoring layer combines:
+
+- configured feature weights;
+- feature strengths;
+- diminishing contributions from additional matches;
+- article importance;
+- negative-interest penalties;
+- explicit score floors for selected high-priority direct matches.
+
+A direct match on a high-priority feature can define a minimum score without changing the classifier itself.
+
+This is used for editorial rules such as making genuinely major AI model releases very likely to reach the final digest.
+
+See [Relevance Scoring](docs/relevance-scoring.md) for the complete scoring model.
+
+## Semantic Deduplication
+
+Ranking and deduplication are separate stages.
+
+The system first builds a ranked candidate pool.
+
+Jev then compares candidate stories semantically to determine whether multiple links are primarily about the same underlying event, release, incident, or development.
+
+Python keeps the preferred representative deterministically and continues filling the digest until it reaches the configured maximum.
+
+This prevents repeated coverage from consuming multiple slots while still allowing distinct analysis or follow-up pieces to compete independently.
+
+## Content Acquisition
+
+The preferred path is:
+
+```text
+Article URL
+→ HTTPX
+→ Trafilatura
+→ article text
+```
+
+If direct extraction fails, Tech Digest can use a sufficiently informative RSS excerpt.
+
+If neither source is usable, the article is retried before falling back to conservative metadata-only classification using its title and URL.
+
+This keeps the pipeline resilient without requiring browser automation or storing publisher content.
+
+## Sources
+
+Sources are configured in `config/sources.yaml`.
+
+The current mix includes:
+
+- Hacker News;
+- engineering and technology newsletters;
+- selected technical blogs;
+- technology publications;
+- official RSS feeds such as OpenAI's news feed.
+
+RSS sources may optionally limit how many entries are imported from unusually large historical feeds.
+
+URL-based deduplication prevents the same feed item from being stored twice.
+
+Semantic story deduplication happens later, when the final digest is assembled.
+
+## Subscribers
+
+The public product has intentionally simple subscription behavior.
+
+```text
+email
+→ subscribe
+→ active subscriber
+→ receives the next edition
+```
+
+There are no user accounts, passwords, dashboards, or per-user ranking profiles.
+
+Subscribers can unsubscribe through a unique tokenized link included in each email.
+
+Repeated subscriptions are idempotent, and a previously unsubscribed address can be reactivated by subscribing again.
+
+## Delivery
+
+Tech Digest generates one final edition and sends it to all active subscribers through Resend.
+
+Each recipient gets an individual message so unsubscribe links remain private.
+
+Delivery failures are isolated per recipient and do not prevent the remaining subscriber list from receiving the edition.
+
+The final email contains:
+
+- the article title;
+- source and publication date;
+- compact `Why` labels;
+- a direct link to the original article.
 
 ## Configuration
 
-Set these in `.env` (see `.env.example` and [Operations](docs/operations.md)):
+Set production secrets and configuration through environment variables.
 
-- `RESEND_API_KEY` for email delivery;
-- optional `RESEND_FROM` (default `Tech Digest <digest@digest.joaoac.com>`);
-- `TYPESAFE_API_KEY` (required for classification and digest duplicate checks);
-- optional `TYPESAFE_MODEL` (default `jev-1.13.0`);
-- `PUBLIC_BASE_URL` for unsubscribe links;
-- optional `DIGEST_DB_PATH` (default `data/digest.db`);
-- optional `DIGEST_JOB_TOKEN` to enable `POST /jobs/collect`, `/jobs/process`, and `/jobs/send`.
+See `.env.example` and [Operations](docs/operations.md) for the current list.
 
-Digest recipients are rows in `subscribers`, not `RESEND_TO`.
+Important values include:
 
-Docker Compose loads `.env` automatically. A local Python shell does not, so export the same variables before `process_daily`, `send_digest`, or `debug_classification`.
+- `TYPESAFE_API_KEY` — TypeSafe/Jev access;
+- optional `TYPESAFE_MODEL` — Jev model selection;
+- `RESEND_API_KEY` — email delivery;
+- optional `RESEND_FROM` — sender identity;
+- `PUBLIC_BASE_URL` — public URL used for unsubscribe links;
+- optional `DIGEST_DB_PATH` — SQLite database path;
+- optional job/API configuration used by the production deployment.
+
+Never commit real secrets.
 
 ## Current Features
 
 - RSS and Atom feed collection
 - YAML-based source configuration
+- configurable per-source entry limits
 - SQLite persistence
-- URL-based deduplication
-- Dockerized collector and daily jobs
-- Scheduled collection through cron
-- Daily classification of all recent articles
-- Article extraction using HTTPX and Trafilatura
-- TypeSafe Jev classification (typed Score outputs)
-- Debug classification without writing to SQLite
-- Deterministic relevance scoring
-- Personalized interest profile
-- Daily ranked digest
-- Jev comparison of titles and RSS excerpts to remove repeated stories across sources before filling the digest
-- Email delivery through Resend
-- Processing logs
+- URL-based article deduplication
+- daily publication-window processing
+- article extraction using HTTPX and Trafilatura
+- RSS excerpt fallback
+- conservative metadata-only fallback
+- TypeSafe Jev classification with typed `Score` outputs
+- deterministic relevance scoring
+- explicit editorial score floors
+- configurable interest profile
+- semantic story deduplication with Jev
+- ranked top-8 daily digest
+- HTML email delivery through Resend
+- public subscribe/unsubscribe flow
+- processing and delivery logs
+- Docker-based local development
+- production deployment support for Railway
 
 ## Project Structure
 
@@ -179,8 +342,7 @@ tech-digest/
 │   ├── scoring.py
 │   ├── digest.py
 │   ├── send_digest.py
-│   ├── email.py
-│   └── telegram.py
+│   └── email.py
 │
 ├── config/
 │   ├── sources.yaml
@@ -188,12 +350,8 @@ tech-digest/
 │   └── digest.yaml
 │
 ├── data/
-│   └── digest.db
-│
 ├── tests/
-│
 ├── logs/
-│
 ├── docs/
 │   ├── architecture.md
 │   ├── relevance-scoring.md
@@ -210,20 +368,24 @@ tech-digest/
 ## Daily Lifecycle
 
 ```text
-periodic lightweight collection
+periodic collection
         ↓
 SQLite metadata
         ↓
-daily classification of all recent articles
+daily classification of recent articles
         ↓
-daily ranked digest
+deterministic ranking
         ↓
-Email
+semantic deduplication
+        ↓
+top 8
+        ↓
+email delivery
 ```
 
-The daily processor selects articles by publication time (`published_at`), falling back to `discovered_at` only when no usable publication timestamp exists.
+The daily processor selects articles primarily by publication time (`published_at`), falling back to `discovered_at` when no usable publication timestamp exists.
 
-That keeps a first import of an RSS source from treating old feed entries as today's news.
+This prevents the first import of a feed from treating historical entries as current news.
 
 ## Running Locally
 
@@ -240,19 +402,19 @@ Install dependencies:
 python -m pip install -r requirements.txt
 ```
 
-Classification talks to the TypeSafe API (`typesafe-sdk`). Export `TYPESAFE_API_KEY` first, for example:
+Load the environment variables used by the project:
 
 ```bash
 set -a && source .env && set +a
 ```
 
-Collect feeds without classifying anything:
+Collect feeds:
 
 ```bash
 python -m app.main
 ```
 
-Classify every eligible article from the daily window:
+Classify eligible articles:
 
 ```bash
 python -m app.process_daily
@@ -264,61 +426,30 @@ Preview the digest:
 python -m app.digest
 ```
 
-Debug one article without saving classification:
+Debug one article without persisting a classification:
 
 ```bash
 python -m app.debug_classification --url "https://example.com/article"
 python -m app.debug_classification --article-id 123
 ```
 
-Send the digest by email:
+Send the digest:
 
 ```bash
 python -m app.send_digest
 ```
 
-## Local end-to-end test
+## Docker Development
 
-Docker is enough. You do not need the virtualenv or a host Python. Compose starts the API and stores SQLite at `data/dev.db` on your machine. There is no separate database container. `data/digest.db` is left untouched.
+Docker Compose can be used for local development and end-to-end testing.
 
-`.env` still has to contain `TYPESAFE_API_KEY` and `RESEND_API_KEY`. Compose loads that file, then forces the dev database and `PUBLIC_BASE_URL=http://127.0.0.1:8080`.
-
-Start the API:
+Build and start the application:
 
 ```bash
-docker compose up --build api
+docker compose up --build
 ```
 
-In another terminal, register the address that should receive the test:
-
-```bash
-curl -s -X POST http://127.0.0.1:8080/subscribe \
-  -H 'content-type: application/json' \
-  -d '{"email":"you@example.com"}'
-```
-
-Run the pipeline inside that same container:
-
-```bash
-docker compose exec api python -m app.main
-docker compose exec api python -m app.process_daily
-docker compose exec api python -m app.digest
-docker compose exec api python -m app.send_digest
-```
-
-Classification calls the TypeSafe API. `app.digest` only prints the edition. `app.send_digest` sends a real email when there is an active subscriber and at least one article from the last 24 hours with a score of at least 60 that has not been delivered yet.
-
-Stop the API before deleting the dev database, then start it again:
-
-```bash
-docker compose stop api
-rm -f data/dev.db data/dev.db-wal data/dev.db-shm
-docker compose up api
-```
-
-The next start creates an empty database. Subscribe again after that. `data/digest.db` stays as it was.
-
-The same dev database is used by one-shot commands:
+One-shot pipeline commands can also be run through Compose:
 
 ```bash
 docker compose run --rm digest
@@ -327,31 +458,49 @@ docker compose run --rm digest python -m app.digest
 docker compose run --rm digest python -m app.send_digest
 ```
 
-### Without Docker
+Use a development database path when testing destructive flows so production data is never affected.
 
-Activate the virtualenv. A bare `python3` on macOS is often Python 3.9 and does not have the project dependencies.
+## Production
+
+The production deployment is designed around a single application instance with persistent SQLite storage.
+
+The production environment is responsible for:
+
+- exposing the subscription API;
+- running scheduled collection and daily processing jobs;
+- constructing the final digest;
+- sending email through Resend;
+- keeping the SQLite database on persistent storage.
+
+A single-writer deployment keeps the SQLite architecture intentionally simple.
+
+See [Operations](docs/operations.md) for deployment details, environment variables, health checks, manual job execution, and persistence verification.
+
+## Testing
+
+Run the full test suite with:
 
 ```bash
-source .venv/bin/activate
-set -a && source .env && set +a
-export DIGEST_DB_PATH=data/dev.db
-export PUBLIC_BASE_URL=http://127.0.0.1:8080
+python -m unittest discover -s tests -v
 ```
+
+Check whitespace errors with:
 
 ```bash
-python -c "
-from app.db import init_db
-from app.subscribers import subscribe_email
-init_db()
-subscribe_email('you@example.com')
-"
-python -m app.main
-python -m app.process_daily
-python -m app.digest
-python -m app.send_digest
+git diff --check
 ```
 
-Clear that same file with `rm -f data/dev.db data/dev.db-wal data/dev.db-shm`.
+The test suite covers the main pipeline behavior, including:
+
+- publication-window selection;
+- processing retries;
+- RSS excerpt fallback;
+- metadata-only fallback;
+- deterministic scoring;
+- digest selection;
+- semantic deduplication;
+- subscriber lifecycle;
+- delivery behavior.
 
 ## Documentation
 
@@ -364,6 +513,8 @@ More details:
 
 ## Status
 
-Tech Digest is currently under active development.
+Tech Digest is in production.
 
-The daily newspaper pipeline is functional: periodic collection, daily classification, ranked digest, and email delivery.
+The current pipeline performs periodic collection, daily classification, deterministic ranking, semantic deduplication, final digest selection, and email delivery.
+
+The public version is intentionally small: one editorial profile, one daily edition, and a simple subscribe/unsubscribe flow.
