@@ -59,11 +59,31 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
             sent_at=SENT_AT,
         )
 
-        self.assertIn("#000000", html)
-        self.assertIn("#7dd3fc", html)
-        self.assertIn("#fde68a", html)
-        self.assertIn("#4a8aa8", html)
-        self.assertIn("#f4f4f5", html)
+        for color in (
+            "#000000",
+            "#f4f4f5",
+            "#d4d4d8",
+            "#a1a1aa",
+            "#262626",
+            "#7dd3fc",
+            "#fde68a",
+            "#4a8aa8",
+            "#64a9ca",
+        ):
+            self.assertIn(color, html)
+        self.assertIn("background-color:#f4f4f5", html)
+        self.assertIn('bgcolor="#f4f4f5"', html)
+        dark_css = html.split(
+            "@media (prefers-color-scheme: dark)",
+            1,
+        )[1]
+        self.assertIn(
+            "background-color:#000000 !important",
+            dark_css,
+        )
+        body = html.split("<body", 1)[1]
+        self.assertIn("background-color:#f4f4f5", body)
+        self.assertNotIn("background-color:#000000", body)
         self.assertIn("IBM Plex Sans", html)
         self.assertIn("IBM Plex Mono", html)
         self.assertIn(
@@ -86,18 +106,19 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
         )
         self.assertIn("font-optical-sizing:auto", html)
         self.assertNotIn("border-radius:", html)
+        self.assertNotIn("mix-blend-mode", html)
         self.assertIn("João Coelho", html)
-        self.assertIn("Technology worth your time", html)
         self.assertIn("Tuesday, Sep 22, 2026", html)
-        self.assertIn("Best articles from the last 24 hours", html)
-        self.assertIn("1 article selected", html)
-        self.assertIn("Tom &amp; Jerry &lt;script&gt;", html)
+        self.assertIn("1 article · last 24 hours", html)
+        self.assertIn(
+            ">Tom &amp; Jerry &lt;script&gt;</a>",
+            html,
+        )
         self.assertNotIn("<script>", html)
         self.assertIn(
             "https://example.com/a?b=1&amp;c=2",
             html,
         )
-        self.assertIn("Read article →", html)
         self.assertIn("Example Feed", html)
         self.assertIn("Compiler design", html)
         self.assertIn("Score 87", html)
@@ -108,7 +129,7 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
         self.assertIn("original publisher", html)
         self.assertNotIn("Unsubscribe", html)
 
-    def test_gmail_mobile_dark_mode_has_contrast_workaround(self):
+    def test_theme_follows_client_color_scheme(self):
         html = render_html_digest(
             digest=_digest(),
             show_score=True,
@@ -117,39 +138,35 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
         )
 
         self.assertIn(
-            'class="body ibm-plex-sans"',
+            'name="color-scheme" content="light dark"',
             html,
         )
         self.assertIn(
-            'name="color-scheme" content="dark"',
+            'name="supported-color-schemes" content="light dark"',
             html,
         )
         self.assertIn(
-            'name="supported-color-schemes" content="dark"',
-            html,
-        )
-        self.assertNotIn("light dark", html)
-        self.assertIn("background-image:linear-gradient(#000000,#000000)", html)
-        self.assertIn(
-            "u + .body .gmail-blend-screen "
-            "{ background:#000000; mix-blend-mode:screen; }",
+            "color-scheme: light dark",
             html,
         )
         self.assertIn(
-            "u + .body .gmail-blend-difference "
-            "{ background:#000000; mix-blend-mode:difference; }",
+            ".dm-bg { background-color:#000000 !important; }",
             html,
         )
         self.assertIn(
-            '<div class="gmail-blend-screen"><div class="gmail-blend-difference">',
+            ".dm-fg { color:#f4f4f5 !important; }",
             html,
         )
-        self.assertLess(
-            html.index('<div class="gmail-blend-screen">'),
-            html.index("Technology worth your time"),
+        self.assertIn(
+            ".dm-link { color:#fde68a !important; }",
+            html,
         )
-        self.assertIn('style="color:#f4f4f5;text-decoration:none;"', html)
-        self.assertIn('style="color:#fde68a;text-decoration:underline;', html)
+        self.assertIn(
+            ".dm-mark { color:#7dd3fc !important; }",
+            html,
+        )
+        self.assertNotIn("mix-blend-mode", html)
+        self.assertNotIn("gmail-blend", html)
 
     def test_hides_score_topics_and_empty_why(self):
         digest = _digest()
@@ -177,9 +194,9 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
         self.assertNotIn("Compiler design", html)
         self.assertNotIn("Databases", html)
         self.assertNotIn(">Why<", html)
-        self.assertIn("2 articles selected", html)
-        self.assertIn("Second", html)
-        self.assertNotIn("Read article →</a>", html.split("Second", 1)[1])
+        self.assertIn("2 articles · last 24 hours", html)
+        self.assertIn(">Second</h2>", html)
+        self.assertNotIn(">Second</a>", html)
 
     def test_subject_uses_send_date(self):
         self.assertEqual(

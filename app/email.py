@@ -72,14 +72,6 @@ def _esc(value: str) -> str:
     return html.escape(value, quote=True)
 
 
-def _bg(color: str) -> str:
-    return (
-        f"background-color:{color};"
-        "background-image:linear-gradient("
-        f"{color},{color});"
-    )
-
-
 def _sans(weight: int = 400) -> str:
     return (
         f"font-family:{FONT_SANS};"
@@ -171,53 +163,46 @@ def _render_article(
     if show_score and article.get("relevance_score") is not None:
         details.append(f"Score {article['relevance_score']}")
 
-    separator = "border-top:1px solid #262626;" if index > 1 else ""
+    hair = (
+        "border-top:1px solid #d4d4d8;"
+        if index > 1
+        else ""
+    )
+    hair_class = " dm-hair" if index > 1 else ""
+    meta = " · ".join(details)
+    kicker = f"{index:02d}"
+    if meta:
+        kicker = f"{kicker} · {_esc(meta)}"
 
     if href:
         title_html = (
-            f'<a href="{_esc(href)}" '
-            'style="color:#f4f4f5;text-decoration:none;">'
+            f'<a href="{_esc(href)}" class="dm-fg" '
+            'style="color:#000000;text-decoration:underline;'
+            'text-underline-offset:3px;">'
             f"{_esc(title)}</a>"
-        )
-        read_link = (
-            f'<a href="{_esc(href)}" '
-            'style="color:#fde68a;text-decoration:underline;'
-            'text-underline-offset:3px;">Read article →</a>'
         )
     else:
         title_html = _esc(title)
-        read_link = ""
 
     why_html = ""
     if why:
         why_html = (
-            '<p class="ibm-plex-sans" style="margin:0 0 14px;'
-            f'{_sans()}font-size:15px;line-height:24px;color:#d4d4d8;">'
-            '<span style="color:#7dd3fc;font-weight:600;">Why:</span> '
+            '<p class="ibm-plex-sans dm-quiet" style="margin:10px 0 0;'
+            f'{_sans()}font-size:15px;line-height:24px;color:#262626;">'
             f"{_esc(why)}</p>"
         )
 
-    link_html = ""
-    if read_link:
-        link_html = (
-            '<p class="ibm-plex-sans" style="margin:0;'
-            f'{_sans(500)}font-size:14px;line-height:22px;">'
-            f"{read_link}</p>"
-        )
-
     return (
-        '<tr><td bgcolor="#000000" '
-        f'style="padding:25px 0 27px;{_bg("#000000")}'
-        f'{separator}">'
-        '<p class="ibm-plex-mono" style="margin:0 0 9px;'
-        f'{_mono()}font-size:11px;line-height:17px;'
-        'letter-spacing:0.06em;color:#a1a1aa;">'
-        f'{index:02d} &nbsp; {_esc(" · ".join(details))}</p>'
-        '<h2 class="ibm-plex-sans" style="margin:0 0 12px;'
-        f'{_sans(600)}font-size:21px;line-height:29px;'
-        'color:#f4f4f5;">'
-        f'{title_html}</h2>{why_html}{link_html}'
-        '</td></tr>'
+        f'<tr><td class="dm-bg{hair_class}" bgcolor="#f4f4f5" '
+        'style="padding:26px 0 2px;background-color:#f4f4f5;'
+        f'{hair}">'
+        '<p class="ibm-plex-mono dm-mark" style="margin:0 0 8px;'
+        f'{_mono()}font-size:12px;line-height:18px;color:#4a8aa8;">'
+        f"{kicker}</p>"
+        '<h2 class="ibm-plex-sans dm-fg" style="margin:0;'
+        f'{_sans(500)}font-size:18px;line-height:26px;color:#000000;">'
+        f"{title_html}</h2>{why_html}"
+        "</td></tr>"
     )
 
 
@@ -232,18 +217,19 @@ def render_html_digest(
     articles = digest.get("articles") or []
     lookback_hours = digest.get("lookback_hours", 24)
     count = len(articles)
-    count_label = f"{count} article{'s' if count != 1 else ''} selected"
-    preheader = f"{count_label} from the last {lookback_hours} hours"
-    lede = f"Best articles from the last {lookback_hours} hours"
+    noun = "article" if count == 1 else "articles"
+    edition = f"{count} {noun} · last {lookback_hours} hours"
+    preheader = edition
     date_label = _format_calendar_date(sent_at, with_weekday=True)
 
     unsubscribe_html = ""
     if unsubscribe_url:
         unsubscribe_html = (
-            '<p class="ibm-plex-sans" style="margin:12px 0 0;'
-            f'{_sans()}font-size:13px;line-height:21px;color:#a1a1aa;">'
-            f'<a href="{_esc(unsubscribe_url)}" '
-            'style="color:#a1a1aa;text-decoration:underline;">'
+            '<p class="ibm-plex-sans" style="margin:14px 0 0;'
+            f'{_sans()}font-size:13px;line-height:20px;">'
+            f'<a href="{_esc(unsubscribe_url)}" class="dm-meta" '
+            "style=\"color:#262626;text-decoration:underline;"
+            'text-underline-offset:3px;">'
             "Unsubscribe</a></p>"
         )
 
@@ -254,10 +240,11 @@ def render_html_digest(
         )
     else:
         article_rows = (
-            '<tr><td style="padding:25px 0;">'
-            '<p class="ibm-plex-sans" style="margin:0;'
-            f'{_sans()}font-size:15px;line-height:24px;color:#d4d4d8;">'
-            'No articles passed the relevance threshold.</p></td></tr>'
+            '<tr><td class="dm-bg" bgcolor="#f4f4f5" '
+            'style="padding:26px 0 2px;background-color:#f4f4f5;">'
+            '<p class="ibm-plex-sans dm-quiet" style="margin:0;'
+            f'{_sans()}font-size:15px;line-height:24px;color:#262626;">'
+            "No articles passed the relevance threshold.</p></td></tr>"
         )
 
     return f"""<!DOCTYPE html>
@@ -265,51 +252,51 @@ def render_html_digest(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="dark">
-<meta name="supported-color-schemes" content="dark">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="{_esc(_SANS_STYLESHEET)}" rel="stylesheet">
 <link href="{_esc(_MONO_STYLESHEET)}" rel="stylesheet">
 <style>
-:root {{ color-scheme: dark; supported-color-schemes: dark; }}
+:root {{ color-scheme: light dark; supported-color-schemes: light dark; }}
 .ibm-plex-sans {{ font-family: "IBM Plex Sans", Arial, sans-serif; }}
 .ibm-plex-mono {{ font-family: "IBM Plex Mono", monospace; }}
-/* Gmail mobile can invert text while keeping a gradient background dark. */
-u + .body .gmail-blend-screen {{ background:#000000; mix-blend-mode:screen; }}
-u + .body .gmail-blend-difference {{ background:#000000; mix-blend-mode:difference; }}
-@media only screen and (max-width:600px) {{
-  .email-shell {{ padding:24px 20px !important; }}
-  .headline {{ font-size:30px !important; line-height:37px !important; }}
+@media (prefers-color-scheme: dark) {{
+  .dm-bg {{ background-color:#000000 !important; }}
+  .dm-fg {{ color:#f4f4f5 !important; }}
+  .dm-quiet {{ color:#d4d4d8 !important; }}
+  .dm-meta {{ color:#a1a1aa !important; }}
+  .dm-brand {{ color:#64a9ca !important; }}
+  .dm-mark {{ color:#7dd3fc !important; }}
+  .dm-link {{ color:#fde68a !important; }}
+  .dm-hair {{ border-color:#262626 !important; }}
 }}
 </style>
 <title>Tech Digest</title>
 </head>
-<body class="body ibm-plex-sans" bgcolor="#000000" style="margin:0;padding:0;{_bg('#000000')}color:#f4f4f5;">
+<body class="body dm-bg dm-fg ibm-plex-sans" bgcolor="#f4f4f5" style="margin:0;padding:0;background-color:#f4f4f5;color:#000000;">
 <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">{_esc(preheader)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#000000" style="{_bg('#000000')}">
-<tr><td align="center" bgcolor="#000000" style="{_bg('#000000')}">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#000000" style="width:100%;max-width:600px;{_bg('#000000')}">
-<tr><td class="email-shell" bgcolor="#000000" style="padding:36px 30px 32px;{_bg('#000000')}color:#f4f4f5;">
-<div class="gmail-blend-screen"><div class="gmail-blend-difference">
-<p class="ibm-plex-mono" style="margin:0 0 25px;{_mono()}font-size:12px;line-height:18px;letter-spacing:0.18em;color:#64a9ca;">TECH DIGEST</p>
-<h1 class="headline ibm-plex-sans" style="margin:0 0 11px;{_sans(600)}font-size:36px;line-height:43px;color:#f4f4f5;">Technology worth your time<span style="color:#7dd3fc;">.</span></h1>
-<p class="ibm-plex-sans" style="margin:0 0 8px;{_sans()}font-size:16px;line-height:25px;color:#d4d4d8;">{_esc(lede)}</p>
-<p class="ibm-plex-mono" style="margin:0 0 32px;{_mono()}font-size:12px;line-height:20px;color:#a1a1aa;">{_esc(date_label)} &nbsp; · &nbsp; {_esc(count_label)}</p>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:2px solid #4a8aa8;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="dm-bg" bgcolor="#f4f4f5" style="background-color:#f4f4f5;">
+<tr><td align="center" class="dm-bg" bgcolor="#f4f4f5" style="background-color:#f4f4f5;">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" class="dm-bg" bgcolor="#f4f4f5" style="width:100%;max-width:560px;background-color:#f4f4f5;">
+<tr><td class="dm-bg" bgcolor="#f4f4f5" style="padding:40px 28px 36px;background-color:#f4f4f5;color:#000000;">
+<p class="ibm-plex-mono dm-brand" style="margin:0 0 22px;{_mono()}font-size:12px;line-height:16px;letter-spacing:0.14em;color:#4a8aa8;">TECH DIGEST</p>
+<h1 class="ibm-plex-sans dm-fg" style="margin:0 0 6px;{_sans(500)}font-size:22px;line-height:30px;color:#000000;">{_esc(date_label)}</h1>
+<p class="ibm-plex-mono dm-meta" style="margin:0 0 28px;{_mono()}font-size:13px;line-height:20px;color:#262626;">{_esc(edition)}</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #4a8aa8;">
 {article_rows}
 </table>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td style="padding:25px 0 0;border-top:1px solid #262626;">
-<p class="ibm-plex-sans" style="margin:0 0 10px;{_sans()}font-size:13px;line-height:21px;color:#a1a1aa;">Curated by João Coelho. Each link goes to its original publisher.</p>
-<p class="ibm-plex-mono" style="margin:0;{_mono()}font-size:13px;line-height:22px;color:#f4f4f5;">
-<a href="https://x.com/joaoac_dev" style="color:#fde68a;text-decoration:underline;">X</a>
-&nbsp; · &nbsp;
-<a href="https://joaoac.com" style="color:#fde68a;text-decoration:underline;">Website</a>
+<tr><td class="dm-hair" style="padding:26px 0 0;border-top:1px solid #d4d4d8;">
+<p class="ibm-plex-sans dm-meta" style="margin:0 0 12px;{_sans()}font-size:13px;line-height:20px;color:#262626;">Curated by João Coelho. Each link goes to its original publisher.</p>
+<p class="ibm-plex-mono" style="margin:0;{_mono()}font-size:13px;line-height:20px;">
+<a href="https://x.com/joaoac_dev" class="dm-link" style="color:#4a8aa8;text-decoration:underline;text-underline-offset:3px;">X</a>
+<span class="dm-meta" style="color:#262626;"> · </span>
+<a href="https://joaoac.com" class="dm-link" style="color:#4a8aa8;text-decoration:underline;text-underline-offset:3px;">Website</a>
 </p>
 {unsubscribe_html}
 </td></tr></table>
-</div></div>
 </td></tr></table>
 </td></tr></table>
 </body>
