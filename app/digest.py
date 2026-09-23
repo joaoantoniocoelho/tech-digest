@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 
 import yaml
@@ -162,26 +163,96 @@ def render_text_digest(
     return "\n".join(lines)
 
 
-def main():
-    config = load_digest_config()
+def sample_digest() -> dict:
+    return {
+        "lookback_hours": 24,
+        "articles": [
+            {
+                "title": "Formal methods with Hillel Wayne",
+                "url": "https://newsletter.pragmaticengineer.com/p/formal-methods",
+                "source": "The Pragmatic Engineer",
+                "published_at": "2026-09-22T15:00:00+00:00",
+                "why_interesting": "Software engineering",
+                "relevance_score": 91,
+                "topics": ["Formal methods"],
+            },
+            {
+                "title": "The last six months in LLMs, in five minutes",
+                "url": "https://simonwillison.net/2026/Sep/22/llms/",
+                "source": "Simon Willison",
+                "published_at": "2026-09-22T18:30:00+00:00",
+                "why_interesting": "AI models",
+                "relevance_score": 88,
+                "topics": ["Language models"],
+            },
+            {
+                "title": "What changed in SQLite this year",
+                "url": "https://sqlite.org/changes.html",
+                "source": "SQLite",
+                "published_at": "2026-09-23T11:00:00+00:00",
+                "why_interesting": "Databases · Systems",
+                "relevance_score": 76,
+                "topics": ["Databases"],
+            },
+        ],
+    }
 
-    digest = build_digest()
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Preview the daily Tech Digest.",
+    )
+    parser.add_argument(
+        "--html",
+        metavar="PATH",
+        help="Write an HTML preview to this file.",
+    )
+    parser.add_argument(
+        "--sample",
+        action="store_true",
+        help="Use sample articles instead of the database.",
+    )
+    args = parser.parse_args(argv)
+
+    config = load_digest_config()
+    show_score = config.get("show_score", True)
+    show_topics = config.get("show_topics", True)
+
+    if args.sample:
+        digest = sample_digest()
+    else:
+        digest = build_digest()
 
     output = render_text_digest(
         digest=digest,
-        show_score=config.get(
-            "show_score",
-            True,
-        ),
-        show_topics=config.get(
-            "show_topics",
-            True,
-        ),
+        show_score=show_score,
+        show_topics=show_topics,
     )
 
     print()
     print(output)
     print()
+
+    if not args.html:
+        return
+
+    from datetime import datetime
+
+    from app.email import render_html_digest
+
+    html_digest = render_html_digest(
+        digest=digest,
+        show_score=show_score,
+        show_topics=show_topics,
+        sent_at=datetime.now().astimezone(),
+        unsubscribe_url=(
+            "https://digest.joaoac.com/unsubscribe/preview"
+        ),
+    )
+    path = Path(args.html)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html_digest, encoding="utf-8")
+    print(f"HTML preview written to {path}")
 
 
 if __name__ == "__main__":

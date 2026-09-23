@@ -2,7 +2,9 @@ import os
 import runpy
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from datetime import datetime, timezone
+from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -11,7 +13,7 @@ runpy.run_path(str(Path(__file__).with_name("_bootstrap.py")))
 
 from app import db
 from app.classifier import is_duplicate_story
-from app.digest import build_digest
+from app.digest import build_digest, main
 
 
 def _article(title, score=80, excerpt=""):
@@ -174,6 +176,28 @@ class CandidateQueryTestCase(unittest.TestCase):
         )
         self.assertEqual(len(limited), 2)
         self.assertEqual(all_candidates[0]["feed_excerpt"], "Excerpt 90")
+
+
+class HtmlPreviewTestCase(unittest.TestCase):
+    def test_sample_preview_writes_html_without_database(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "digest.html"
+
+            with redirect_stdout(StringIO()):
+                main(["--sample", "--html", str(path)])
+
+            html = path.read_text(encoding="utf-8")
+
+        self.assertIn("TECH DIGEST", html)
+        self.assertIn("Formal methods with Hillel Wayne", html)
+        self.assertIn("The last six months in LLMs, in five minutes", html)
+        self.assertIn("What changed in SQLite this year", html)
+        self.assertIn(
+            "https://digest.joaoac.com/unsubscribe/preview",
+            html,
+        )
+        self.assertNotIn("Read article", html)
+        self.assertIn("Technology worth your time.", html)
 
 
 if __name__ == "__main__":

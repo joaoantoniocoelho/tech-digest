@@ -13,18 +13,53 @@ DEFAULT_FROM = (
     "João Coelho Tech Digest <digest@digest.joaoac.com>"
 )
 
-FONT_SANS = "'IBM Plex Sans', sans-serif"
-FONT_MONO = "'IBM Plex Mono', monospace"
+FONT_SANS = "'Helvetica Neue', Helvetica, Arial, sans-serif"
 
-_SANS_STYLESHEET = (
-    "https://fonts.googleapis.com/css2"
-    "?family=IBM+Plex+Sans:ital,wght@0,100..700;1,100..700"
-    "&display=swap"
+PAPER = "#ffffff"
+CANVAS = "#f4f4f5"
+INK = "#18181b"
+COPY = "#3f3f46"
+MUTED = "#52525b"
+FAINT = "#a1a1aa"
+ACCENT = "#1f6a88"
+ACCENT_MARK = "#64a9ca"
+
+_WEEKDAYS = (
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
 )
-_MONO_STYLESHEET = (
-    "https://fonts.googleapis.com/css2"
-    "?family=IBM+Plex+Mono:wght@400;500"
-    "&display=swap"
+_MONTHS = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
+_MONTHS_SHORT = (
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
 )
 
 
@@ -75,18 +110,7 @@ def _esc(value: str) -> str:
 def _sans(weight: int = 400) -> str:
     return (
         f"font-family:{FONT_SANS};"
-        "font-optical-sizing:auto;"
-        "font-style:normal;"
-        "font-variation-settings:'wdth' 100;"
         f"font-weight:{weight};"
-    )
-
-
-def _mono() -> str:
-    return (
-        f"font-family:{FONT_MONO};"
-        "font-optical-sizing:auto;"
-        "font-style:normal;"
     )
 
 
@@ -95,7 +119,7 @@ def _format_calendar_date(
     with_weekday: bool = False,
 ) -> str:
     label = (
-        f"{value.strftime('%b')} "
+        f"{_MONTHS_SHORT[value.month - 1]} "
         f"{value.day}, "
         f"{value.year}"
     )
@@ -103,7 +127,19 @@ def _format_calendar_date(
     if not with_weekday:
         return label
 
-    return f"{value.strftime('%A')}, {label}"
+    return f"{_WEEKDAYS[value.weekday()]}, {label}"
+
+
+def _format_edition_date(
+    value: datetime,
+) -> tuple[str, str]:
+    weekday = _WEEKDAYS[value.weekday()]
+    long_date = (
+        f"{_MONTHS[value.month - 1]} "
+        f"{value.day}, "
+        f"{value.year}"
+    )
+    return weekday, long_date
 
 
 def _format_article_date(
@@ -117,7 +153,7 @@ def _format_article_date(
     local = parsed.astimezone()
 
     return (
-        f"{local.strftime('%b')} {local.day}"
+        f"{_MONTHS_SHORT[local.month - 1]} {local.day}"
     )
 
 
@@ -141,67 +177,139 @@ def _article_href(url: str) -> str:
     return ""
 
 
-def _render_article(
+def _edition_stamp(value: datetime) -> str:
+    month = _MONTHS_SHORT[value.month - 1].upper()
+    return f"{month} {value.day}"
+
+
+def _clean(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _story_bits(
     article: dict,
-    index: int,
+    show_score: bool,
+    show_topics: bool,
+    include_why: bool,
+) -> tuple[str, str]:
+    source = _clean(article.get("source"))
+    published = _format_article_date(article.get("published_at"))
+    why = _clean(article.get("why_interesting"))
+    credit = [part for part in (source, published) if part]
+
+    if show_topics:
+        credit.extend(
+            _clean(topic)
+            for topic in article.get("topics") or []
+            if _clean(topic)
+        )
+
+    if show_score and article.get("relevance_score") is not None:
+        credit.append(f"Score {article['relevance_score']}")
+
+    dek = ""
+    if why:
+        if include_why:
+            credit.append(why)
+        else:
+            dek = why
+
+    return " · ".join(credit), dek
+
+
+def _title_html(title: str, href: str, mark_size: int) -> str:
+    label = _esc(title)
+    if not href:
+        return label
+
+    return (
+        f'<a href="{_esc(href)}" class="ink" '
+        f'style="color:{INK};text-decoration:none;">'
+        f"{label}<span class=\"accent\" style=\"{_sans()}"
+        f"color:{ACCENT};font-size:{mark_size}px;"
+        f"line-height:1;margin-left:6px;\">&gt;</span></a>"
+    )
+
+
+def _render_story(
+    article: dict,
+    lead: bool,
     show_score: bool,
     show_topics: bool,
 ) -> str:
-    title = (article.get("title") or "Untitled").strip() or "Untitled"
-    href = _article_href((article.get("url") or "").strip())
-    why = (article.get("why_interesting") or "").strip()
-    source = (article.get("source") or "").strip()
-    published = _format_article_date(article.get("published_at"))
-
-    details = [part for part in (source, published) if part]
-    if show_topics:
-        details.extend(
-            str(topic).strip()
-            for topic in article.get("topics") or []
-            if str(topic).strip()
-        )
-    if show_score and article.get("relevance_score") is not None:
-        details.append(f"Score {article['relevance_score']}")
-
-    hair = (
-        "border-top:1px solid #d4d4d8;"
-        if index > 1
-        else ""
+    title = _clean(article.get("title")) or "Untitled"
+    href = _article_href(_clean(article.get("url")))
+    credit, dek = _story_bits(
+        article,
+        show_score,
+        show_topics,
+        include_why=not lead,
     )
-    hair_class = " dm-hair" if index > 1 else ""
-    meta = " · ".join(details)
-    kicker = f"{index:02d}"
-    if meta:
-        kicker = f"{kicker} · {_esc(meta)}"
+    title_html = _title_html(
+        title,
+        href,
+        mark_size=13 if lead else 12,
+    )
+    gap = "48px" if lead else "26px"
+    size = "20px" if lead else "17px"
+    line = "26px" if lead else "23px"
+    title_class = "lead" if lead else "story"
+    credit_gap = "8px" if lead else "4px"
 
-    if href:
-        title_html = (
-            f'<a href="{_esc(href)}" class="dm-fg" '
-            'style="color:#000000;text-decoration:underline;'
-            'text-underline-offset:3px;">'
-            f"{_esc(title)}</a>"
+    credit_html = ""
+    if credit:
+        credit_html = (
+            f'<p class="muted" style="margin:{credit_gap} 0 0;'
+            f'{_sans()}font-size:13px;line-height:18px;color:{MUTED};">'
+            f"{_esc(credit)}</p>"
         )
-    else:
-        title_html = _esc(title)
 
-    why_html = ""
-    if why:
-        why_html = (
-            '<p class="ibm-plex-sans dm-quiet" style="margin:10px 0 0;'
-            f'{_sans()}font-size:15px;line-height:24px;color:#262626;">'
-            f"{_esc(why)}</p>"
+    dek_html = ""
+    if dek:
+        dek_html = (
+            '<p class="copy" style="margin:4px 0 0;'
+            f'{_sans()}font-size:14px;line-height:20px;color:{COPY};">'
+            f"{_esc(dek)}</p>"
         )
 
     return (
-        f'<tr><td class="dm-bg{hair_class}" bgcolor="#f4f4f5" '
-        'style="padding:26px 0 2px;background-color:#f4f4f5;'
-        f'{hair}">'
-        '<p class="ibm-plex-mono dm-mark" style="margin:0 0 8px;'
-        f'{_mono()}font-size:12px;line-height:18px;color:#4a8aa8;">'
-        f"{kicker}</p>"
-        '<h2 class="ibm-plex-sans dm-fg" style="margin:0;'
-        f'{_sans(500)}font-size:18px;line-height:26px;color:#000000;">'
-        f"{title_html}</h2>{why_html}"
+        "<tr><td "
+        f'style="padding-top:{gap};">'
+        f'<h2 class="{title_class} ink" style="margin:0;'
+        f'{_sans(500)}font-size:{size};line-height:{line};color:{INK};">'
+        f"{title_html}</h2>"
+        f"{credit_html}{dek_html}"
+        "</td></tr>"
+    )
+
+
+def _render_footer(unsubscribe_url: str | None) -> str:
+    link = (
+        f'{_sans()}font-size:12px;line-height:18px;'
+        f"color:{ACCENT};text-decoration:underline;"
+        "text-underline-offset:2px;"
+    )
+    parts = [
+        f'<a href="https://joaoac.com" class="accent" style="{link}">Website</a>',
+        f'<a href="https://x.com/joaoac_dev" class="accent" style="{link}">X</a>',
+    ]
+    if unsubscribe_url:
+        parts.append(
+            f'<a href="{_esc(unsubscribe_url)}" class="accent" style="{link}">'
+            "Unsubscribe</a>"
+        )
+
+    separated = (
+        f'<span class="faint" style="color:{FAINT};">'
+        "&nbsp;&nbsp;·&nbsp;&nbsp;</span>"
+    ).join(parts)
+
+    return (
+        "<tr><td style=\"padding-top:44px;\">"
+        '<p class="muted" style="margin:0;'
+        f'{_sans()}font-size:12px;line-height:18px;color:{MUTED};">'
+        "Curated by João Coelho</p>"
+        f'<p style="margin:8px 0 0;">{separated}</p>'
         "</td></tr>"
     )
 
@@ -217,35 +325,35 @@ def render_html_digest(
     articles = digest.get("articles") or []
     lookback_hours = digest.get("lookback_hours", 24)
     count = len(articles)
-    noun = "article" if count == 1 else "articles"
-    edition = f"{count} {noun} · last {lookback_hours} hours"
-    preheader = edition
-    date_label = _format_calendar_date(sent_at, with_weekday=True)
-
-    unsubscribe_html = ""
-    if unsubscribe_url:
-        unsubscribe_html = (
-            '<p class="ibm-plex-sans" style="margin:14px 0 0;'
-            f'{_sans()}font-size:13px;line-height:20px;">'
-            f'<a href="{_esc(unsubscribe_url)}" class="dm-meta" '
-            "style=\"color:#262626;text-decoration:underline;"
-            'text-underline-offset:3px;">'
-            "Unsubscribe</a></p>"
-        )
+    noun = "story" if count == 1 else "stories"
+    edition = (
+        f"{count} selected {noun} from the last "
+        f"{lookback_hours} hours"
+    )
+    weekday, long_date = _format_edition_date(sent_at)
+    stamp = _edition_stamp(sent_at)
+    preheader = f"{weekday}, {long_date}. {edition}."
 
     if articles:
-        article_rows = "\n".join(
-            _render_article(article, index, show_score, show_topics)
+        story_rows = "\n".join(
+            _render_story(
+                article,
+                lead=index == 1,
+                show_score=show_score,
+                show_topics=show_topics,
+            )
             for index, article in enumerate(articles, start=1)
         )
     else:
-        article_rows = (
-            '<tr><td class="dm-bg" bgcolor="#f4f4f5" '
-            'style="padding:26px 0 2px;background-color:#f4f4f5;">'
-            '<p class="ibm-plex-sans dm-quiet" style="margin:0;'
-            f'{_sans()}font-size:15px;line-height:24px;color:#262626;">'
-            "No articles passed the relevance threshold.</p></td></tr>"
+        story_rows = (
+            "<tr><td style=\"padding-top:28px;\">"
+            '<p class="copy" style="margin:0;'
+            f'{_sans()}font-size:15px;line-height:22px;color:{COPY};">'
+            "No articles passed the relevance threshold.</p>"
+            "</td></tr>"
         )
+
+    footer = _render_footer(unsubscribe_url)
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -254,54 +362,58 @@ def render_html_digest(
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light dark">
 <meta name="supported-color-schemes" content="light dark">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="{_esc(_SANS_STYLESHEET)}" rel="stylesheet">
-<link href="{_esc(_MONO_STYLESHEET)}" rel="stylesheet">
 <style>
 :root {{ color-scheme: light dark; supported-color-schemes: light dark; }}
-.ibm-plex-sans {{ font-family: "IBM Plex Sans", Arial, sans-serif; }}
-.ibm-plex-mono {{ font-family: "IBM Plex Mono", monospace; }}
+body, table, td, p, h2, a {{ -webkit-text-size-adjust:100%; }}
+@media only screen and (max-width: 620px) {{
+  .canvas-pad {{ padding:8px 0 !important; }}
+  .sheet {{ padding:28px 22px 32px !important; }}
+  .lead {{ font-size:18px !important; line-height:24px !important; }}
+  .story {{ font-size:16px !important; line-height:22px !important; }}
+}}
 @media (prefers-color-scheme: dark) {{
-  .dm-bg {{ background-color:#000000 !important; }}
-  .dm-fg {{ color:#f4f4f5 !important; }}
-  .dm-quiet {{ color:#d4d4d8 !important; }}
-  .dm-meta {{ color:#a1a1aa !important; }}
-  .dm-brand {{ color:#64a9ca !important; }}
-  .dm-mark {{ color:#7dd3fc !important; }}
-  .dm-link {{ color:#fde68a !important; }}
-  .dm-hair {{ border-color:#262626 !important; }}
+  .canvas {{ background-color:#000000 !important; }}
+  .paper {{ background-color:#18181b !important; }}
+  .ink {{ color:#f4f4f5 !important; }}
+  .copy {{ color:#d4d4d8 !important; }}
+  .muted {{ color:#a1a1aa !important; }}
+  .faint {{ color:#71717a !important; }}
+  .accent {{ color:#7dd3fc !important; }}
+  .mark {{ background-color:#64a9ca !important; }}
 }}
 </style>
 <title>João Coelho Tech Digest</title>
 </head>
-<body class="body dm-bg dm-fg ibm-plex-sans" bgcolor="#f4f4f5" style="margin:0;padding:0;background-color:#f4f4f5;color:#000000;">
-<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">{_esc(preheader)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="dm-bg" bgcolor="#f4f4f5" style="background-color:#f4f4f5;">
-<tr><td align="center" class="dm-bg" bgcolor="#f4f4f5" style="background-color:#f4f4f5;">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" class="dm-bg" bgcolor="#f4f4f5" style="width:100%;max-width:560px;background-color:#f4f4f5;">
-<tr><td class="dm-bg" bgcolor="#f4f4f5" style="padding:40px 28px 36px;background-color:#f4f4f5;color:#000000;">
-<p class="ibm-plex-mono dm-brand" style="margin:0 0 22px;{_mono()}font-size:12px;line-height:16px;letter-spacing:0.08em;color:#4a8aa8;">João Coelho Tech Digest</p>
-<h1 class="ibm-plex-sans dm-fg" style="margin:0 0 6px;{_sans(500)}font-size:22px;line-height:30px;color:#000000;">{_esc(date_label)}</h1>
-<p class="ibm-plex-mono dm-meta" style="margin:0 0 28px;{_mono()}font-size:13px;line-height:20px;color:#262626;">{_esc(edition)}</p>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #4a8aa8;">
-{article_rows}
-</table>
+<body class="canvas" bgcolor="{CANVAS}" style="margin:0;padding:0;background-color:{CANVAS};">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">{_esc(preheader)}&#847;&zwnj;&nbsp;</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="canvas" bgcolor="{CANVAS}" style="background-color:{CANVAS};">
+<tr><td align="center" class="canvas canvas-pad" bgcolor="{CANVAS}" style="padding:24px 16px;background-color:{CANVAS};">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="paper" bgcolor="{PAPER}" style="width:100%;max-width:600px;background-color:{PAPER};">
+<tr><td class="paper sheet" bgcolor="{PAPER}" style="padding:36px 48px 40px;background-color:{PAPER};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td class="dm-hair" style="padding:26px 0 0;border-top:1px solid #d4d4d8;">
-<p class="ibm-plex-sans dm-meta" style="margin:0 0 12px;{_sans()}font-size:13px;line-height:20px;color:#262626;">Curated by João Coelho. Each link goes to its original publisher.</p>
-<p class="ibm-plex-mono" style="margin:0;{_mono()}font-size:13px;line-height:20px;">
-<a href="https://x.com/joaoac_dev" class="dm-link" style="color:#4a8aa8;text-decoration:underline;text-underline-offset:3px;">X</a>
-<span class="dm-meta" style="color:#262626;"> · </span>
-<a href="https://joaoac.com" class="dm-link" style="color:#4a8aa8;text-decoration:underline;text-underline-offset:3px;">Website</a>
-</p>
-{unsubscribe_html}
-</td></tr></table>
-</td></tr></table>
-</td></tr></table>
+<tr>
+<td class="muted" style="{_sans()}font-size:11px;line-height:16px;letter-spacing:0.18em;color:{MUTED};">TECH DIGEST</td>
+<td class="accent" align="right" style="{_sans()}font-size:11px;line-height:16px;letter-spacing:0.14em;color:{ACCENT};">{_esc(stamp)}</td>
+</tr>
+</table>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;">
+<tr><td class="mark" width="28" height="2" bgcolor="{ACCENT_MARK}" style="width:28px;height:2px;background-color:{ACCENT_MARK};font-size:0;line-height:2px;">&nbsp;</td></tr>
+</table>
+<p class="ink" style="margin:20px 0 0;{_sans()}font-size:16px;line-height:24px;color:{INK};">Technology worth your time.</p>
+<p class="muted" style="margin:10px 0 0;{_sans()}font-size:13px;line-height:18px;color:{MUTED};">{_esc(weekday)}, {_esc(long_date)}</p>
+<p class="muted" style="margin:2px 0 0;{_sans()}font-size:13px;line-height:18px;color:{MUTED};">{_esc(edition)}</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+{story_rows}
+{footer}
+</table>
+</td></tr>
+</table>
+</td></tr>
+</table>
 </body>
 </html>
 """
+
 
 
 def send_email(

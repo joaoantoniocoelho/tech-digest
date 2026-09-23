@@ -60,19 +60,19 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
         )
 
         for color in (
-            "#000000",
             "#f4f4f5",
-            "#d4d4d8",
+            "#ffffff",
+            "#18181b",
+            "#3f3f46",
+            "#52525b",
             "#a1a1aa",
-            "#262626",
-            "#7dd3fc",
-            "#fde68a",
-            "#4a8aa8",
+            "#1f6a88",
             "#64a9ca",
         ):
             self.assertIn(color, html)
         self.assertIn("background-color:#f4f4f5", html)
         self.assertIn('bgcolor="#f4f4f5"', html)
+        self.assertIn('bgcolor="#ffffff"', html)
         dark_css = html.split(
             "@media (prefers-color-scheme: dark)",
             1,
@@ -81,40 +81,35 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
             "background-color:#000000 !important",
             dark_css,
         )
+        self.assertIn(
+            "background-color:#18181b !important",
+            dark_css,
+        )
+        self.assertIn("color:#7dd3fc !important", dark_css)
+        self.assertIn("color:#f4f4f5 !important", dark_css)
         body = html.split("<body", 1)[1]
         self.assertIn("background-color:#f4f4f5", body)
         self.assertNotIn("background-color:#000000", body)
-        self.assertIn("IBM Plex Sans", html)
-        self.assertIn("IBM Plex Mono", html)
-        self.assertIn(
-            "https://fonts.googleapis.com/css2?family="
-            "IBM+Plex+Sans:ital,wght@0,100..700;1,100..700"
-            "&amp;display=swap",
-            html,
-        )
-        self.assertIn(
-            'rel="preconnect" href="https://fonts.googleapis.com"',
-            html,
-        )
-        self.assertIn(
-            'href="https://fonts.gstatic.com" crossorigin',
-            html,
-        )
-        self.assertIn(
-            "font-variation-settings:'wdth' 100",
-            html,
-        )
-        self.assertIn("font-optical-sizing:auto", html)
+        self.assertIn("Helvetica Neue", html)
+        self.assertNotIn("Georgia", html)
+        self.assertNotIn("fonts.googleapis.com", html)
         self.assertNotIn("border-radius:", html)
         self.assertNotIn("mix-blend-mode", html)
         self.assertIn("João Coelho Tech Digest", html)
-        self.assertIn("João Coelho", html)
-        self.assertIn("Tuesday, Sep 22, 2026", html)
-        self.assertIn("1 article · last 24 hours", html)
+        self.assertIn("TECH DIGEST", html)
+        self.assertIn("SEP 22", html)
+        self.assertIn("Curated by João Coelho", html)
+        self.assertIn("Tuesday, September 22, 2026", html)
         self.assertIn(
-            ">Tom &amp; Jerry &lt;script&gt;</a>",
+            "1 selected story from the last 24 hours",
             html,
         )
+        self.assertIn("Technology worth your time.", html)
+        self.assertIn("Tom &amp; Jerry", html)
+        self.assertIn("&lt;script&gt;", html)
+        self.assertIn("&gt;</span>", html)
+        self.assertNotIn("&#8599;", html)
+        self.assertNotIn(">Tech Digest</p>", html)
         self.assertNotIn("<script>", html)
         self.assertIn(
             "https://example.com/a?b=1&amp;c=2",
@@ -124,10 +119,12 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
         self.assertIn("Compiler design", html)
         self.assertIn("Score 87", html)
         self.assertIn("AI agents · Developer tools", html)
+        self.assertNotIn(">Why<", html)
+        self.assertNotIn("Read article", html)
+        self.assertNotIn(">01<", html)
         self.assertIn("Sep 22", html)
         self.assertIn('href="https://x.com/joaoac_dev"', html)
         self.assertIn('href="https://joaoac.com"', html)
-        self.assertIn("original publisher", html)
         self.assertNotIn("Unsubscribe", html)
 
     def test_theme_follows_client_color_scheme(self):
@@ -151,19 +148,19 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
             html,
         )
         self.assertIn(
-            ".dm-bg { background-color:#000000 !important; }",
+            ".canvas { background-color:#000000 !important; }",
             html,
         )
         self.assertIn(
-            ".dm-fg { color:#f4f4f5 !important; }",
+            ".paper { background-color:#18181b !important; }",
             html,
         )
         self.assertIn(
-            ".dm-link { color:#fde68a !important; }",
+            ".ink { color:#f4f4f5 !important; }",
             html,
         )
         self.assertIn(
-            ".dm-mark { color:#7dd3fc !important; }",
+            ".accent { color:#7dd3fc !important; }",
             html,
         )
         self.assertNotIn("mix-blend-mode", html)
@@ -195,7 +192,10 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
         self.assertNotIn("Compiler design", html)
         self.assertNotIn("Databases", html)
         self.assertNotIn(">Why<", html)
-        self.assertIn("2 articles · last 24 hours", html)
+        self.assertIn(
+            "2 selected stories from the last 24 hours",
+            html,
+        )
         self.assertIn(">Second</h2>", html)
         self.assertNotIn(">Second</a>", html)
 
