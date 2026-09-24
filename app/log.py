@@ -13,6 +13,7 @@ _SECRET_ENV_NAMES = (
     "TYPESAFE_API_KEY",
     "RESEND_API_KEY",
     "DIGEST_JOB_TOKEN",
+    "TELEGRAM_BOT_TOKEN",
 )
 _PRINT_LOCK = threading.Lock()
 
