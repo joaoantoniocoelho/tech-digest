@@ -31,6 +31,7 @@ def process_daily() -> dict:
     )
 
     summary = process_articles(articles)
+    summary["eligible"] = len(articles)
 
     print()
     print("Daily processing complete.")

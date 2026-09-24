@@ -47,7 +47,7 @@ def unsubscribe_url(token: str) -> str:
     return f"{public_base_url()}/unsubscribe/{token}"
 
 
-def subscribe_email(raw_email) -> None:
+def subscribe_email(raw_email) -> str:
     email = normalize_email(raw_email)
     now = datetime.now(timezone.utc).isoformat()
     token = secrets.token_urlsafe(32)
@@ -77,7 +77,7 @@ def subscribe_email(raw_email) -> None:
                 """,
                 (email, now, token),
             )
-            return
+            return "created"
 
         if row["status"] != "active":
             connection.execute(
@@ -90,6 +90,9 @@ def subscribe_email(raw_email) -> None:
                 """,
                 (now, row["id"]),
             )
+            return "reactivated"
+
+        return "unchanged"
 
 
 def token_is_known(token: str) -> bool:
@@ -109,9 +112,9 @@ def token_is_known(token: str) -> bool:
     return row is not None
 
 
-def unsubscribe_with_token(token: str) -> bool:
+def unsubscribe_with_token(token: str) -> dict | None:
     if _TOKEN_RE.fullmatch(token or "") is None:
-        return False
+        return None
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -119,7 +122,7 @@ def unsubscribe_with_token(token: str) -> bool:
         connection.execute("BEGIN IMMEDIATE")
         row = connection.execute(
             """
-            SELECT id, status
+            SELECT id, email, status
             FROM subscribers
             WHERE unsubscribe_token = ?
             """,
@@ -127,8 +130,9 @@ def unsubscribe_with_token(token: str) -> bool:
         ).fetchone()
 
         if row is None:
-            return False
+            return None
 
+        status = "unchanged"
         if row["status"] != "unsubscribed":
             connection.execute(
                 """
@@ -139,8 +143,12 @@ def unsubscribe_with_token(token: str) -> bool:
                 """,
                 (now, row["id"]),
             )
+            status = "unsubscribed"
 
-        return True
+        return {
+            "email": row["email"],
+            "status": status,
+        }
 
 
 def list_active_subscribers() -> list[dict]:

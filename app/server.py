@@ -10,9 +10,11 @@ from urllib.parse import urlsplit
 
 from app.db import DB_PATH, get_connection, init_db
 from app.log import log_event, redact_text
+from app.notify import notify_subscriber
 from app.pipeline import start_job
 from app.scheduler import Scheduler
 from app.subscribers import (
+    normalize_email,
     subscribe_email,
     token_is_known,
     unsubscribe_with_token,
@@ -215,17 +217,25 @@ class DigestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            subscribe_email(payload.get("email"))
+            email = normalize_email(payload.get("email"))
+            outcome = subscribe_email(email)
         except ValueError:
             self._reply(400, {"ok": False})
             return
 
+        if outcome in {"created", "reactivated"}:
+            notify_subscriber(outcome, email)
+
         self._reply(200, {"ok": True})
 
     def _unsubscribe(self, token: str) -> None:
-        if not unsubscribe_with_token(token):
+        result = unsubscribe_with_token(token)
+        if not result:
             self._reply(404, {"ok": False})
             return
+
+        if result["status"] == "unsubscribed":
+            notify_subscriber("unsubscribed", result["email"])
 
         self._reply(200, {"ok": True})
 
