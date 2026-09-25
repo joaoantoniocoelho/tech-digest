@@ -37,7 +37,7 @@ Production is one Railway service: the HTTP API and scheduler share one SQLite f
 
 ## Public Newsletter
 
-The public digest is the same edition for every subscriber. Signup is `POST /subscribe` with no account, confirmation email, or per-person preferences.
+The public digest is the same edition for every subscriber. Signup is `POST /subscribe` with no account, double opt-in, or per-person preferences. New subscribers get a welcome email with the latest edition.
 
 The public version should still avoid reproducing original article content.
 

@@ -47,7 +47,7 @@ def unsubscribe_url(token: str) -> str:
     return f"{public_base_url()}/unsubscribe/{token}"
 
 
-def subscribe_email(raw_email) -> None:
+def subscribe_email(raw_email) -> dict | None:
     email = normalize_email(raw_email)
     now = datetime.now(timezone.utc).isoformat()
     token = secrets.token_urlsafe(32)
@@ -56,7 +56,7 @@ def subscribe_email(raw_email) -> None:
         connection.execute("BEGIN IMMEDIATE")
         row = connection.execute(
             """
-            SELECT id, status
+            SELECT id, status, unsubscribe_token
             FROM subscribers
             WHERE email = ?
             """,
@@ -77,7 +77,7 @@ def subscribe_email(raw_email) -> None:
                 """,
                 (email, now, token),
             )
-            return
+            return {"email": email, "unsubscribe_token": token}
 
         if row["status"] != "active":
             connection.execute(
@@ -90,6 +90,12 @@ def subscribe_email(raw_email) -> None:
                 """,
                 (now, row["id"]),
             )
+            return {
+                "email": email,
+                "unsubscribe_token": row["unsubscribe_token"],
+            }
+
+    return None
 
 
 def token_is_known(token: str) -> bool:

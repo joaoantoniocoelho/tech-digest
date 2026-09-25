@@ -314,47 +314,38 @@ def _render_footer(unsubscribe_url: str | None) -> str:
     )
 
 
-def render_html_digest(
-    digest: dict,
-    show_score: bool = False,
-    show_topics: bool = False,
-    sent_at: datetime | None = None,
-    unsubscribe_url: str | None = None,
+def _render_stories(
+    articles: list[dict],
+    show_score: bool,
+    show_topics: bool,
 ) -> str:
-    sent_at = sent_at or datetime.now().astimezone()
-    articles = digest.get("articles") or []
-    lookback_hours = digest.get("lookback_hours", 24)
-    count = len(articles)
-    noun = "story" if count == 1 else "stories"
-    edition = (
-        f"{count} selected {noun} from the last "
-        f"{lookback_hours} hours"
+    return "\n".join(
+        _render_story(
+            article,
+            lead=index == 1,
+            show_score=show_score,
+            show_topics=show_topics,
+        )
+        for index, article in enumerate(articles, start=1)
     )
-    weekday, long_date = _format_edition_date(sent_at)
-    stamp = _edition_stamp(sent_at)
-    preheader = f"{weekday}, {long_date}. {edition}."
 
-    if articles:
-        story_rows = "\n".join(
-            _render_story(
-                article,
-                lead=index == 1,
-                show_score=show_score,
-                show_topics=show_topics,
-            )
-            for index, article in enumerate(articles, start=1)
-        )
-    else:
-        story_rows = (
-            "<tr><td style=\"padding-top:28px;\">"
-            '<p class="copy" style="margin:0;'
-            f'{_sans()}font-size:15px;line-height:22px;color:{COPY};">'
-            "No articles passed the relevance threshold.</p>"
-            "</td></tr>"
-        )
 
-    footer = _render_footer(unsubscribe_url)
+def _render_paragraph(text: str, top: str = "28px") -> str:
+    return (
+        f"<tr><td style=\"padding-top:{top};\">"
+        '<p class="copy" style="margin:0;'
+        f'{_sans()}font-size:15px;line-height:22px;color:{COPY};">'
+        f"{_esc(text)}</p>"
+        "</td></tr>"
+    )
 
+
+def _render_document(
+    preheader: str,
+    stamp: str,
+    intro: str,
+    rows: str,
+) -> str:
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -399,12 +390,9 @@ body, table, td, p, h2, a {{ -webkit-text-size-adjust:100%; }}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;">
 <tr><td class="mark" width="28" height="2" bgcolor="{ACCENT_MARK}" style="width:28px;height:2px;background-color:{ACCENT_MARK};font-size:0;line-height:2px;">&nbsp;</td></tr>
 </table>
-<p class="ink" style="margin:20px 0 0;{_sans()}font-size:16px;line-height:24px;color:{INK};">Technology worth your time.</p>
-<p class="muted" style="margin:10px 0 0;{_sans()}font-size:13px;line-height:18px;color:{MUTED};">{_esc(weekday)}, {_esc(long_date)}</p>
-<p class="muted" style="margin:2px 0 0;{_sans()}font-size:13px;line-height:18px;color:{MUTED};">{_esc(edition)}</p>
+{intro}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-{story_rows}
-{footer}
+{rows}
 </table>
 </td></tr>
 </table>
@@ -414,6 +402,129 @@ body, table, td, p, h2, a {{ -webkit-text-size-adjust:100%; }}
 </html>
 """
 
+
+def _render_edition_meta(
+    weekday: str,
+    long_date: str,
+    edition: str,
+    label: str = "",
+    top: str = "10px",
+) -> str:
+    date_line = f"{weekday}, {long_date}"
+    if label:
+        date_line = f"{label} · {date_line}"
+    return (
+        f'<p class="muted" style="margin:{top} 0 0;{_sans()}font-size:13px;'
+        f'line-height:18px;color:{MUTED};">{_esc(date_line)}</p>\n'
+        f'<p class="muted" style="margin:2px 0 0;{_sans()}font-size:13px;'
+        f'line-height:18px;color:{MUTED};">{_esc(edition)}</p>'
+    )
+
+
+def _edition_label(count: int, lookback_hours: int) -> str:
+    noun = "story" if count == 1 else "stories"
+    return (
+        f"{count} selected {noun} from the last "
+        f"{lookback_hours} hours"
+    )
+
+
+def render_html_digest(
+    digest: dict,
+    show_score: bool = False,
+    show_topics: bool = False,
+    sent_at: datetime | None = None,
+    unsubscribe_url: str | None = None,
+) -> str:
+    sent_at = sent_at or datetime.now().astimezone()
+    articles = digest.get("articles") or []
+    lookback_hours = digest.get("lookback_hours", 24)
+    edition = _edition_label(len(articles), lookback_hours)
+    weekday, long_date = _format_edition_date(sent_at)
+    preheader = f"{weekday}, {long_date}. {edition}."
+
+    if articles:
+        story_rows = _render_stories(articles, show_score, show_topics)
+    else:
+        story_rows = _render_paragraph(
+            "No articles passed the relevance threshold."
+        )
+
+    intro = (
+        f'<p class="ink" style="margin:20px 0 0;{_sans()}font-size:16px;'
+        f'line-height:24px;color:{INK};">Technology worth your time.</p>\n'
+        + _render_edition_meta(weekday, long_date, edition)
+    )
+
+    return _render_document(
+        preheader=preheader,
+        stamp=_edition_stamp(sent_at),
+        intro=intro,
+        rows=f"{story_rows}\n{_render_footer(unsubscribe_url)}",
+    )
+
+
+WELCOME_SUBJECT = "Welcome to João Coelho Tech Digest"
+WELCOME_LINES = (
+    "Thanks for subscribing.",
+    "Every morning you will get a short edition with the technology "
+    "stories worth your time, picked from a small set of trusted sources.",
+)
+WELCOME_LATEST = "While you wait for the next one, here is the latest edition."
+WELCOME_FIRST = "Your first edition arrives with the next morning send."
+
+
+def render_html_welcome(
+    edition: dict | None,
+    show_score: bool = False,
+    show_topics: bool = False,
+    sent_at: datetime | None = None,
+    unsubscribe_url: str | None = None,
+) -> str:
+    sent_at = sent_at or datetime.now().astimezone()
+    articles = (edition or {}).get("articles") or []
+    delivered_at = (edition or {}).get("delivered_at")
+
+    intro = (
+        f'<p class="ink" style="margin:20px 0 0;{_sans(500)}font-size:20px;'
+        f'line-height:26px;color:{INK};">Welcome to Tech Digest.</p>\n'
+        + "\n".join(
+            f'<p class="copy" style="margin:12px 0 0;{_sans()}font-size:15px;'
+            f'line-height:22px;color:{COPY};">{_esc(line)}</p>'
+            for line in WELCOME_LINES
+        )
+    )
+
+    if articles:
+        published = (delivered_at or sent_at).astimezone()
+        weekday, long_date = _format_edition_date(published)
+        rows = (
+            _render_paragraph(WELCOME_LATEST, top="32px")
+            + "\n<tr><td>"
+            + _render_edition_meta(
+                weekday,
+                long_date,
+                _edition_label(
+                    len(articles),
+                    (edition or {}).get("lookback_hours", 24),
+                ),
+                label="Latest edition",
+                top="16px",
+            )
+            + "</td></tr>\n"
+            + _render_stories(articles, show_score, show_topics)
+        )
+        preheader = f"Thanks for subscribing. {WELCOME_LATEST}"
+    else:
+        rows = _render_paragraph(WELCOME_FIRST, top="32px")
+        preheader = f"Thanks for subscribing. {WELCOME_FIRST}"
+
+    return _render_document(
+        preheader=preheader,
+        stamp="WELCOME",
+        intro=intro,
+        rows=f"{rows}\n{_render_footer(unsubscribe_url)}",
+    )
 
 
 def send_email(

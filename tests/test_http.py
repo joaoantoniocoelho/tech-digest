@@ -29,6 +29,8 @@ class HttpApiTestCase(unittest.TestCase):
             clear=False,
         )
         self.env.start()
+        self.welcome_patcher = patch("app.server.queue_welcome_email")
+        self.queue_welcome = self.welcome_patcher.start()
         self.server = create_server("127.0.0.1", 0)
         self.thread = threading.Thread(
             target=self.server.serve_forever,
@@ -42,6 +44,7 @@ class HttpApiTestCase(unittest.TestCase):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=2)
+        self.welcome_patcher.stop()
         self.env.stop()
         self.db_patcher.stop()
         for suffix in ("", "-wal", "-shm"):
@@ -102,6 +105,10 @@ class HttpApiTestCase(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["email"], "reader@example.com")
         self.assertEqual(rows[0]["status"], "active")
+        self.queue_welcome.assert_called_once()
+        subscriber = self.queue_welcome.call_args.args[0]
+        self.assertEqual(subscriber["email"], "reader@example.com")
+        self.assertGreaterEqual(len(subscriber["unsubscribe_token"]), 20)
 
     def test_invalid_email_and_body_limits(self):
         status, _headers, payload = self.post_json(
@@ -188,12 +195,10 @@ class HttpApiTestCase(unittest.TestCase):
                 "SELECT unsubscribe_token FROM subscribers"
             ).fetchone()["unsubscribe_token"]
 
-        page_status, headers, page = self.request("GET", f"/unsubscribe/{token}")
+        page_status, _headers, page = self.request("GET", f"/unsubscribe/{token}")
         self.assertEqual(page_status, 200)
-        self.assertEqual(page, b'{"ok": true}')
-        self.assertIn("application/json", headers["content-type"])
-        self.assertNotIn(b"<html", page.lower())
-        self.assertNotIn(token.encode(), page)
+        self.assertIn(b"Confirm that you want to stop", page)
+        self.assertNotIn(token.encode(), page.split(b"action=", 1)[0])
         with db.get_connection() as connection:
             status = connection.execute(
                 "SELECT status FROM subscribers"
@@ -205,7 +210,7 @@ class HttpApiTestCase(unittest.TestCase):
             f"/unsubscribe/{token}",
         )
         self.assertEqual(post_status, 200)
-        self.assertEqual(body, b'{"ok": true}')
+        self.assertIn(b"no longer receive", body)
         with db.get_connection() as connection:
             status = connection.execute(
                 "SELECT status FROM subscribers"
@@ -225,7 +230,7 @@ class HttpApiTestCase(unittest.TestCase):
             "/unsubscribe/this-token-does-not-exist-at-all",
         )
         self.assertEqual(missing_status, 404)
-        self.assertEqual(missing, b'{"ok": false}')
+        self.assertIn(b"not valid", missing)
         self.assertNotIn(b"reader@example.com", missing)
 
     def test_job_endpoint_auth_and_lock(self):

@@ -260,6 +260,7 @@ The public product has intentionally simple subscription behavior.
 email
 → subscribe
 → active subscriber
+→ welcome email with the latest edition
 → receives the next edition
 ```
 
@@ -267,7 +268,7 @@ There are no user accounts, passwords, dashboards, or per-user ranking profiles.
 
 Subscribers can unsubscribe through a unique tokenized link included in each email.
 
-Repeated subscriptions are idempotent, and a previously unsubscribed address can be reactivated by subscribing again.
+Repeated subscriptions are idempotent, and a previously unsubscribed address can be reactivated by subscribing again. The welcome email is sent only when an address becomes active, not on repeat subscriptions.
 
 ## Delivery
 

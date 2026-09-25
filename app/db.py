@@ -666,3 +666,61 @@ def mark_articles_delivered(
             """,
             article_ids,
         )
+
+
+def get_latest_edition() -> dict | None:
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                id,
+                source,
+                title,
+                url,
+                published_at,
+                relevance_score,
+                why_interesting,
+                topics,
+                delivered_at
+            FROM articles
+            WHERE delivered_at = (
+                SELECT MAX(delivered_at)
+                FROM articles
+            )
+            ORDER BY
+                relevance_score DESC,
+                discovered_at DESC,
+                id DESC
+            """
+        ).fetchall()
+
+    if not rows:
+        return None
+
+    articles = []
+
+    for row in rows:
+        try:
+            topics = json.loads(row["topics"] or "[]")
+        except json.JSONDecodeError:
+            topics = []
+
+        articles.append(
+            {
+                "id": row["id"],
+                "source": row["source"],
+                "title": row["title"],
+                "url": row["url"],
+                "published_at": row["published_at"],
+                "relevance_score": row["relevance_score"],
+                "why_interesting": row["why_interesting"],
+                "topics": topics,
+            }
+        )
+
+    return {
+        "delivered_at": _parse_article_datetime(
+            rows[0]["delivered_at"]
+        ),
+        "articles": articles,
+    }

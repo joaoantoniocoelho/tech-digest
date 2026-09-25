@@ -8,6 +8,11 @@ from app.db import (
     get_digest_candidates,
     init_db,
 )
+from app.email import (
+    WELCOME_FIRST,
+    WELCOME_LATEST,
+    WELCOME_LINES,
+)
 from app.log import log_event
 
 
@@ -160,6 +165,45 @@ def render_text_digest(
         lines.append("")
         lines.append(f"Unsubscribe: {unsubscribe_url}")
 
+    return "\n".join(lines)
+
+
+def render_text_welcome(
+    edition: dict | None,
+    show_score: bool = False,
+    show_topics: bool = False,
+    unsubscribe_url: str | None = None,
+) -> str:
+    lines = [
+        "Welcome to João Coelho Tech Digest",
+        "",
+        *WELCOME_LINES,
+        "",
+    ]
+    articles = (edition or {}).get("articles") or []
+
+    if not articles:
+        lines.append(WELCOME_FIRST)
+        if unsubscribe_url:
+            lines.append("")
+            lines.append(f"Unsubscribe: {unsubscribe_url}")
+        return "\n".join(lines)
+
+    lines.append(WELCOME_LATEST)
+    lines.append("")
+    lines.append("=" * 60)
+    lines.append("")
+    lines.append(
+        render_text_digest(
+            digest={
+                "lookback_hours": edition.get("lookback_hours", 24),
+                "articles": articles,
+            },
+            show_score=show_score,
+            show_topics=show_topics,
+            unsubscribe_url=unsubscribe_url,
+        )
+    )
     return "\n".join(lines)
 
 

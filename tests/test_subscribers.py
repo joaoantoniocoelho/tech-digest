@@ -50,6 +50,20 @@ class SubscriberStoreTestCase(unittest.TestCase):
         self.assertGreaterEqual(len(row["unsubscribe_token"]), 20)
         self.assertEqual(len(list_active_subscribers()), 1)
 
+    def test_subscribe_reports_only_new_activations(self):
+        created = subscribe_email("reader@example.com")
+        token = self._row()["unsubscribe_token"]
+        self.assertEqual(
+            created,
+            {"email": "reader@example.com", "unsubscribe_token": token},
+        )
+        self.assertIsNone(subscribe_email("reader@example.com"))
+        unsubscribe_with_token(token)
+        self.assertEqual(
+            subscribe_email("reader@example.com"),
+            {"email": "reader@example.com", "unsubscribe_token": token},
+        )
+
     def test_duplicate_subscribe_stays_successful_and_stable(self):
         subscribe_email("reader@example.com")
         original = self._row()

@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import html
 import json
 import os
 import signal
@@ -17,6 +18,7 @@ from app.subscribers import (
     token_is_known,
     unsubscribe_with_token,
 )
+from app.welcome import queue_welcome_email
 
 
 MAX_BODY_BYTES = 4096
@@ -132,6 +134,35 @@ def _database_ok() -> bool:
         return False
 
 
+def _page(title: str, message: str, token: str | None = None) -> str:
+    form = ""
+    if token:
+        action = html.escape(f"/unsubscribe/{token}", quote=True)
+        form = (
+            f'<form method="post" action="{action}">'
+            '<button type="submit">Unsubscribe</button>'
+            "</form>"
+        )
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html.escape(title)}</title>
+</head>
+<body style="margin:0;background:#000;color:#f4f4f5;font-family:sans-serif;">
+<main style="max-width:32rem;margin:4rem auto;padding:0 1.25rem;">
+<p style="letter-spacing:0.14em;color:#64a9ca;">TECH DIGEST</p>
+<h1 style="font-weight:600;">{html.escape(title)}</h1>
+<p style="color:#d4d4d8;line-height:1.5;">{html.escape(message)}</p>
+{form}
+</main>
+</body>
+</html>
+"""
+
+
 class DigestHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -189,8 +220,7 @@ class DigestHandler(BaseHTTPRequestHandler):
                 self._reply(404, {"ok": False})
                 return
             if method == "GET":
-                known = token_is_known(token)
-                self._reply(200 if known else 404, {"ok": known})
+                self._unsubscribe_page(token)
                 return
             if method == "POST":
                 self._unsubscribe(token)
@@ -215,19 +245,57 @@ class DigestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            subscribe_email(payload.get("email"))
+            subscriber = subscribe_email(payload.get("email"))
         except ValueError:
             self._reply(400, {"ok": False})
             return
 
         self._reply(200, {"ok": True})
+        if subscriber:
+            queue_welcome_email(subscriber)
+
+    def _unsubscribe_page(self, token: str) -> None:
+        if not token_is_known(token):
+            self._reply(
+                404,
+                _page(
+                    "Link not valid",
+                    "This unsubscribe link is not valid.",
+                ),
+                content_type="text/html; charset=utf-8",
+            )
+            return
+
+        self._reply(
+            200,
+            _page(
+                "Unsubscribe",
+                "Confirm that you want to stop receiving Tech Digest.",
+                token=token,
+            ),
+            content_type="text/html; charset=utf-8",
+        )
 
     def _unsubscribe(self, token: str) -> None:
         if not unsubscribe_with_token(token):
-            self._reply(404, {"ok": False})
+            self._reply(
+                404,
+                _page(
+                    "Link not valid",
+                    "This unsubscribe link is not valid.",
+                ),
+                content_type="text/html; charset=utf-8",
+            )
             return
 
-        self._reply(200, {"ok": True})
+        self._reply(
+            200,
+            _page(
+                "Unsubscribed",
+                "You will no longer receive Tech Digest.",
+            ),
+            content_type="text/html; charset=utf-8",
+        )
 
     def _start_job(self, job: str) -> None:
         authorization = _job_authorization(
