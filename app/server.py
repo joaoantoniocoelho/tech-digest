@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 from app.db import DB_PATH, get_connection, init_db
 from app.log import log_event, redact_text
+from app.notify import notify_subscriber
 from app.pipeline import start_job
 from app.scheduler import Scheduler
 from app.subscribers import (
@@ -252,6 +253,7 @@ class DigestHandler(BaseHTTPRequestHandler):
 
         self._reply(200, {"ok": True})
         if subscriber:
+            notify_subscriber(subscriber["action"], subscriber["email"])
             queue_welcome_email(subscriber)
 
     def _unsubscribe_page(self, token: str) -> None:
@@ -277,7 +279,8 @@ class DigestHandler(BaseHTTPRequestHandler):
         )
 
     def _unsubscribe(self, token: str) -> None:
-        if not unsubscribe_with_token(token):
+        result = unsubscribe_with_token(token)
+        if not result:
             self._reply(
                 404,
                 _page(
@@ -296,6 +299,8 @@ class DigestHandler(BaseHTTPRequestHandler):
             ),
             content_type="text/html; charset=utf-8",
         )
+        if result["status"] == "unsubscribed":
+            notify_subscriber("unsubscribed", result["email"])
 
     def _start_job(self, job: str) -> None:
         authorization = _job_authorization(

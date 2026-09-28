@@ -79,7 +79,20 @@ RESEND_API_KEY=...
 PUBLIC_BASE_URL=http://127.0.0.1:8080
 ```
 
-The sender defaults to `Tech Digest <digest@digest.joaoac.com>`. Override it with `RESEND_FROM` if needed. Recipients are active rows in `subscribers`. `RESEND_TO` is not used for the digest. `app/telegram.py` stays in the project, and `send_digest` does not call it.
+The sender defaults to `Tech Digest <digest@digest.joaoac.com>`. Override it with `RESEND_FROM` if needed. Recipients are active rows in `subscribers`. `RESEND_TO` is not used for the digest. `send_digest` does not send the edition through Telegram.
+
+## Operator alerts
+
+The same bot can post short operational alerts when `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are both set. Unset variables disable alerts. A Telegram failure is logged and does not fail the job or the HTTP request.
+
+Alerts cover:
+
+- news search start and finish, with the count of new articles;
+- classification start and finish, with eligible, classified, and failed counts;
+- digest send start and finish, or the redacted error;
+- a new or reactivated subscriber, and an unsubscribe.
+
+Messages use a redacted email (`r***@example.com`). The digest itself is still email-only.
 
 ## Run with Docker
 

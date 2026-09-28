@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.db import get_connection, init_db
 from app.log import log_event, redact_text
+from app.notify import notify_job_finish, notify_job_start
 
 
 STALE_LOCK_SECONDS = 90
@@ -18,6 +19,7 @@ _PUBLIC_RESULT_KEYS = (
     "subscribers",
     "sent",
     "failed_sends",
+    "eligible",
 )
 
 
@@ -179,23 +181,28 @@ def _run_held(job: str, owner: str, function) -> str:
 
     try:
         log_event("job_start", job=job)
+        notify_job_start(job)
         result = function()
+        fields = _public_fields(result)
         log_event(
             "job_finish",
             job=job,
             status="ok",
-            **_public_fields(result),
+            **fields,
         )
+        notify_job_finish(job, "ok", **fields)
         return "ok"
     except Exception as error:
+        message = redact_text(
+            f"{type(error).__name__}: {error}"
+        )
         log_event(
             "job_finish",
             job=job,
             status="error",
-            error=redact_text(
-                f"{type(error).__name__}: {error}"
-            ),
+            error=message,
         )
+        notify_job_finish(job, "error", error=message)
         return "error"
     finally:
         stop.set()

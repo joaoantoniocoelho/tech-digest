@@ -55,13 +55,21 @@ class SubscriberStoreTestCase(unittest.TestCase):
         token = self._row()["unsubscribe_token"]
         self.assertEqual(
             created,
-            {"email": "reader@example.com", "unsubscribe_token": token},
+            {
+                "email": "reader@example.com",
+                "unsubscribe_token": token,
+                "action": "created",
+            },
         )
         self.assertIsNone(subscribe_email("reader@example.com"))
         unsubscribe_with_token(token)
         self.assertEqual(
             subscribe_email("reader@example.com"),
-            {"email": "reader@example.com", "unsubscribe_token": token},
+            {
+                "email": "reader@example.com",
+                "unsubscribe_token": token,
+                "action": "reactivated",
+            },
         )
 
     def test_duplicate_subscribe_stays_successful_and_stable(self):
