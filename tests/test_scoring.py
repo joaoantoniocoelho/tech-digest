@@ -38,7 +38,7 @@ class RelevanceScoringTestCase(unittest.TestCase):
             importance=1,
         )
 
-        self.assertEqual(score, 85)
+        self.assertEqual(score, 70)
 
     def test_strength_one_does_not_trigger_floor(self):
         score = calculate_relevance_score(
@@ -94,7 +94,7 @@ class RelevanceScoringTestCase(unittest.TestCase):
             importance=1,
         )
 
-        self.assertEqual(score, 50)
+        self.assertEqual(score, 45)
 
     def test_importance_and_negative_penalty_run_before_floor(self):
         profile = deepcopy(self.profile)
@@ -109,7 +109,7 @@ class RelevanceScoringTestCase(unittest.TestCase):
 
         self.assertEqual(
             calculate_relevance_score(strengths, profile, importance=3),
-            77,
+            76,
         )
 
         strengths["deep_infrastructure"] = 2

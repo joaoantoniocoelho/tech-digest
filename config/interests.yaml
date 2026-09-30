@@ -1,8 +1,9 @@
 features:
   major_ai_model_development:
     label: AI models
+    group: ai
     weight: 55
-    direct_match_score_floor: 85
+    direct_match_score_floor: 70
     description: >
       The article is mainly about a major new AI or large language model,
       a significant capability jump, or a broadly important model release.
@@ -16,7 +17,8 @@ features:
 
   ai_agents:
     label: AI agents
-    weight: 50
+    group: ai
+    weight: 45
     description: >
       AI agents or agentic systems that plan, use tools, take actions,
       or autonomously complete multi-step tasks are an important subject.
@@ -30,6 +32,7 @@ features:
 
   ai_assisted_software_engineering:
     label: AI-assisted engineering
+    group: ai
     weight: 50
     description: >
       AI is materially used to write, review, debug, test, design,
@@ -46,7 +49,8 @@ features:
 
   developer_tools:
     label: Developer tools
-    weight: 45
+    group: engineering
+    weight: 50
     description: >
       The article is substantially about tools, products, platforms,
       or workflows specifically intended for software developers.
@@ -63,7 +67,8 @@ features:
 
   software_engineering_practices:
     label: Software engineering
-    weight: 50
+    group: engineering
+    weight: 55
     description: >
       The article substantially discusses software architecture,
       engineering trade-offs, reliability, testing, maintainability,
@@ -84,6 +89,7 @@ features:
 
   engineering_culture_teams:
     label: Engineering culture
+    group: engineering
     weight: 45
     description: >
       Engineering culture, software teams, organizational practices,
@@ -98,7 +104,8 @@ features:
 
   security:
     label: Security
-    weight: 50
+    group: security
+    weight: 55
     description: >
       Security is a concrete subject: vulnerabilities, exploits,
       attacks, defense, authentication, cryptography, supply chain,
@@ -114,7 +121,8 @@ features:
 
   leading_tech_company_major_development:
     label: Big tech developments
-    weight: 40
+    group: business
+    weight: 35
     description: >
       A genuinely significant product, strategy, platform,
       organizational, or technology development from a leading
@@ -129,6 +137,7 @@ features:
 
   apple_ecosystem:
     label: Apple
+    group: systems
     weight: 45
     description: >
       Apple products, platforms, Apple Silicon, macOS, iOS, iPadOS,
@@ -143,6 +152,7 @@ features:
 
   practical_ai_research:
     label: AI research
+    group: ai
     weight: 35
     description: >
       AI research, model capabilities, training, inference,
@@ -157,6 +167,7 @@ features:
 
   startups_saas_indie:
     label: Startups & SaaS
+    group: business
     weight: 30
     description: >
       Startups, SaaS products, indie hacking, product building,
@@ -173,6 +184,7 @@ features:
 
   technology_business_strategy:
     label: Tech business strategy
+    group: business
     weight: 42
     description: >
       Business strategy in the technology industry: business models,
@@ -190,6 +202,7 @@ features:
 
   technology_industry_market:
     label: Tech industry market
+    group: business
     weight: 35
     description: >
       Meaningful changes in the technology industry's competitive
@@ -205,6 +218,7 @@ features:
 
   software_industry_orgs:
     label: Software industry
+    group: business
     weight: 30
     description: >
       The software industry, technology companies, engineering
@@ -219,6 +233,7 @@ features:
 
   developer_careers_job_market:
     label: Developer careers
+    group: business
     weight: 30
     description: >
       Software engineering careers, hiring, compensation, job
@@ -233,6 +248,7 @@ features:
 
   open_source:
     label: Open source
+    group: engineering
     weight: 22
     description: >
       Open-source software, open-source development, project
@@ -247,6 +263,7 @@ features:
 
   programming_languages_frameworks:
     label: Languages & frameworks
+    group: engineering
     weight: 22
     description: >
       Programming languages, frameworks, runtimes, language design,
@@ -261,7 +278,8 @@ features:
 
   databases_developer_infrastructure:
     label: Developer infrastructure
-    weight: 30
+    group: engineering
+    weight: 45
     description: >
       Databases, developer infrastructure, deployment systems,
       observability, cloud tooling, or infrastructure used to
@@ -275,7 +293,8 @@ features:
 
   self_hosting_local_ai:
     label: Self-hosting & local AI
-    weight: 35
+    group: systems
+    weight: 40
     description: >
       Self-hosting, homelabs, running local services, local AI
       inference, on-device execution, or personally operated
@@ -289,7 +308,8 @@ features:
 
   privacy:
     label: Privacy
-    weight: 30
+    group: security
+    weight: 40
     description: >
       User privacy, privacy-preserving technology, data protection,
       tracking prevention, or privacy engineering are important
@@ -302,6 +322,7 @@ features:
 
   interesting_software_project:
     label: Interesting software
+    group: systems
     weight: 25
     description: >
       An unusual, creative, or technically interesting software

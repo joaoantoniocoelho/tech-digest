@@ -193,13 +193,13 @@ class WhyAndTopicsTestCase(unittest.TestCase):
             top_ids,
             [
                 "major_ai_model_development",
-                "ai_agents",
                 "developer_tools",
+                "ai_agents",
             ],
         )
         self.assertEqual(
             why,
-            "AI models · AI agents · Developer tools",
+            "AI models · Developer tools · AI agents",
         )
         self.assertEqual(topics, why.split(" · "))
         self.assertEqual(len(topics), 3)
@@ -226,9 +226,9 @@ class WhyAndTopicsTestCase(unittest.TestCase):
         profile = _load_profile()
         features = profile["features"]
         strengths = _zero_strengths(features)
-        strengths["ai_agents"] = 2
-        strengths["software_engineering_practices"] = 2
         strengths["developer_tools"] = 2
+        strengths["software_engineering_practices"] = 2
+        strengths["ai_assisted_software_engineering"] = 2
 
         why, topics = _build_why_and_topics(
             feature_strengths=strengths,
@@ -237,7 +237,7 @@ class WhyAndTopicsTestCase(unittest.TestCase):
 
         self.assertEqual(
             why,
-            "AI agents · Software engineering · Developer tools",
+            "Software engineering · AI-assisted engineering · Developer tools",
         )
         self.assertEqual(topics, why.split(" · "))
 

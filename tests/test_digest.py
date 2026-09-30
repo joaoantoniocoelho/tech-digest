@@ -16,12 +16,13 @@ from app.classifier import is_duplicate_story
 from app.digest import build_digest, main
 
 
-def _article(title, score=80, excerpt=""):
+def _article(title, score=80, excerpt="", topics=None):
     return {
         "title": title,
         "source": "Example",
         "feed_excerpt": excerpt,
         "relevance_score": score,
+        "topics": topics or [],
     }
 
 
@@ -141,6 +142,110 @@ class DigestSelectionTestCase(unittest.TestCase):
 
         self.assertEqual(len(digest["articles"]), 2)
         self.assertEqual(is_duplicate.call_count, 1)
+
+
+class DiversitySelectionTestCase(unittest.TestCase):
+    CONFIG = {
+        "lookback_hours": 24,
+        "minimum_score": 60,
+        "maximum_articles": 4,
+        "diversity": {
+            "penalty": 8,
+            "free_per_group": {"ai": 2},
+        },
+    }
+    GROUPS = {
+        "AI models": "ai",
+        "AI agents": "ai",
+        "Security": "security",
+        "Software engineering": "engineering",
+    }
+
+    def _build(self, candidates, config=None):
+        with patch("app.digest.init_db"), patch(
+            "app.digest.load_digest_config",
+            return_value=config or self.CONFIG,
+        ), patch(
+            "app.digest.get_digest_candidates",
+            return_value=candidates,
+        ), patch(
+            "app.digest.load_topic_groups",
+            return_value=self.GROUPS,
+        ), patch(
+            "app.digest.is_duplicate_story",
+            return_value=False,
+        ):
+            return [
+                article["title"]
+                for article in build_digest()["articles"]
+            ]
+
+    def test_extra_items_from_a_full_group_rank_lower(self):
+        titles = self._build([
+            _article("AI 1", 90, topics=["AI models"]),
+            _article("AI 2", 88, topics=["AI agents"]),
+            _article("AI 3", 86, topics=["AI models", "Security"]),
+            _article("AI 4", 84, topics=["AI agents"]),
+            _article("Security", 75, topics=["Security"]),
+            _article("Engineering", 70, topics=["Software engineering"]),
+        ])
+
+        self.assertEqual(
+            titles,
+            ["AI 1", "AI 2", "AI 3", "Security"],
+        )
+
+    def test_strong_items_still_win_over_much_weaker_ones(self):
+        titles = self._build([
+            _article("AI 1", 95, topics=["AI models"]),
+            _article("AI 2", 94, topics=["AI models"]),
+            _article("AI 3", 93, topics=["AI models"]),
+            _article("AI 4", 92, topics=["AI models"]),
+            _article("Security", 61, topics=["Security"]),
+        ])
+
+        self.assertEqual(titles, ["AI 1", "AI 2", "AI 3", "AI 4"])
+
+    def test_diversity_never_adds_articles_below_the_candidates(self):
+        titles = self._build([
+            _article("AI 1", 90, topics=["AI models"]),
+            _article("AI 2", 88, topics=["AI models"]),
+            _article("AI 3", 86, topics=["AI models"]),
+        ])
+
+        self.assertEqual(titles, ["AI 1", "AI 2", "AI 3"])
+
+    def test_without_diversity_config_order_is_by_score(self):
+        config = dict(self.CONFIG)
+        del config["diversity"]
+
+        titles = self._build(
+            [
+                _article("AI 1", 90, topics=["AI models"]),
+                _article("AI 2", 88, topics=["AI models"]),
+                _article("AI 3", 86, topics=["AI models"]),
+                _article("Security", 70, topics=["Security"]),
+            ],
+            config=config,
+        )
+
+        self.assertEqual(titles, ["AI 1", "AI 2", "AI 3", "Security"])
+
+    def test_every_positive_feature_has_a_known_group(self):
+        from app.digest import INTERESTS_PATH
+
+        import yaml
+
+        with INTERESTS_PATH.open() as file:
+            features = yaml.safe_load(file)["features"]
+
+        for feature_id, feature in features.items():
+            if feature["weight"] > 0:
+                self.assertIn(
+                    feature.get("group"),
+                    {"ai", "engineering", "security", "business", "systems"},
+                    feature_id,
+                )
 
 
 class CandidateQueryTestCase(unittest.TestCase):

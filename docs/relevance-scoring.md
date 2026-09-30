@@ -199,6 +199,28 @@ These ranges are guidelines, not hard editorial rules.
 
 The digest already uses a minimum score (`minimum_score: 60`) plus a maximum number of articles (`maximum_articles: 8`). It does not fill a quota with weaker items.
 
+## Edition Diversity
+
+The relevance score judges one article at a time. It cannot tell that an edition already holds three AI stories.
+
+Each positive feature therefore has an editorial `group` (`ai`, `engineering`, `security`, `business`, `systems`). An article's group is the group of its strongest topic.
+
+Selection is greedy. At each step the digest picks the candidate with the highest adjusted score:
+
+```text
+adjusted = relevance_score - penalty × extra items already in its group
+```
+
+`free_per_group` in `config/digest.yaml` sets how many items a group gets before the penalty starts (default 1; `ai` and `engineering` get 2). With `penalty: 8`, a third AI article at 85 ranks as 77, and a fourth ranks as 69.
+
+This is a soft preference, not a quota:
+
+- only candidates at or above `minimum_score` are considered, so diversity never brings in a weak article;
+- a much stronger article still wins over a weak one from an under-represented group;
+- if a day only has AI candidates, the edition is still all AI.
+
+Duplicate detection (Jev) runs on each pick as before. It also drops an article that covers the same launch from a very similar angle.
+
 ## Important Design Rule
 
 A high score should not mean:

@@ -15,3 +15,15 @@ maximum_articles: 8
 
 show_score: false
 show_topics: false
+
+# Editorial diversity. Each article's group is the group of its
+# strongest topic (see `group` in interests.yaml). Once a group
+# already has `free_per_group` articles (default 1), each further
+# article from it ranks `penalty` points lower per extra item.
+# This only reorders candidates above minimum_score; it never
+# brings in weaker articles to fill a category.
+diversity:
+  penalty: 8
+  free_per_group:
+    ai: 2
+    engineering: 2

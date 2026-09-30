@@ -17,11 +17,56 @@ from app.log import log_event
 
 
 CONFIG_PATH = Path("config/digest.yaml")
+INTERESTS_PATH = Path("config/interests.yaml")
 
 
 def load_digest_config() -> dict:
     with CONFIG_PATH.open() as file:
         return yaml.safe_load(file)
+
+
+def load_topic_groups() -> dict:
+    """Map each feature label to its editorial group."""
+    with INTERESTS_PATH.open() as file:
+        features = yaml.safe_load(file)["features"]
+
+    return {
+        feature["label"]: feature["group"]
+        for feature in features.values()
+        if feature.get("group")
+    }
+
+
+def _primary_group(
+    article: dict,
+    topic_groups: dict,
+) -> str | None:
+    # Topics are ordered by score contribution, so the first one
+    # is what the article is mainly about.
+    topics = article.get("topics") or []
+
+    if not topics:
+        return None
+
+    return topic_groups.get(topics[0])
+
+
+def _diversity_score(
+    article: dict,
+    group: str | None,
+    group_counts: dict,
+    diversity: dict,
+) -> float:
+    if group is None:
+        return article["relevance_score"]
+
+    free = diversity.get("free_per_group", {}).get(group, 1)
+    repeats = max(0, group_counts.get(group, 0) - free + 1)
+
+    return (
+        article["relevance_score"]
+        - diversity.get("penalty", 0) * repeats
+    )
 
 
 def get_processing_lookback_hours() -> int:
@@ -49,13 +94,38 @@ def build_digest() -> dict:
         minimum_score=minimum_score,
     )
 
+    # Diversity only reorders candidates that already passed
+    # minimum_score; it never pulls in a weaker article.
+    diversity = config.get("diversity") or {}
+    topic_groups = (
+        load_topic_groups()
+        if diversity.get("penalty")
+        else {}
+    )
+    groups = {
+        id(candidate): _primary_group(candidate, topic_groups)
+        for candidate in candidates
+    }
+    group_counts = {}
+
     articles = []
     skipped_title = 0
     skipped_semantic = 0
+    remaining = list(candidates)
 
-    for candidate in candidates:
-        if len(articles) >= maximum_articles:
-            break
+    while remaining and len(articles) < maximum_articles:
+        # max() keeps the first of equal scores, preserving the
+        # database order (score, then recency) on ties.
+        candidate = max(
+            remaining,
+            key=lambda article: _diversity_score(
+                article,
+                groups[id(article)],
+                group_counts,
+                diversity,
+            ),
+        )
+        remaining.remove(candidate)
 
         title = " ".join(candidate["title"].split()).casefold()
 
@@ -72,12 +142,21 @@ def build_digest() -> dict:
 
         articles.append(candidate)
 
+        group = groups[id(candidate)]
+
+        if group is not None:
+            group_counts[group] = group_counts.get(group, 0) + 1
+
     log_event(
         "digest_build",
         candidates=len(candidates),
         selected=len(articles),
         skipped_title=skipped_title,
         skipped_semantic=skipped_semantic,
+        groups=",".join(
+            f"{group}:{count}"
+            for group, count in sorted(group_counts.items())
+        ),
     )
 
     return {
