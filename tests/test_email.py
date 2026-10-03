@@ -123,7 +123,7 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
         self.assertNotIn("Read article", html)
         self.assertNotIn(">01<", html)
         self.assertIn("Sep 22", html)
-        self.assertIn('href="https://x.com/joaoac_dev"', html)
+        self.assertIn('href="https://x.com/joaoac_"', html)
         self.assertIn('href="https://joaoac.com"', html)
         self.assertNotIn("Unsubscribe", html)
 

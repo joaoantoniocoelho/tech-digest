@@ -291,7 +291,7 @@ def _render_footer(unsubscribe_url: str | None) -> str:
     )
     parts = [
         f'<a href="https://joaoac.com" class="accent" style="{link}">Website</a>',
-        f'<a href="https://x.com/joaoac_dev" class="accent" style="{link}">X</a>',
+        f'<a href="https://x.com/joaoac_" class="accent" style="{link}">X</a>',
     ]
     if unsubscribe_url:
         parts.append(
