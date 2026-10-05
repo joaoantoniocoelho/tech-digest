@@ -369,6 +369,7 @@ class SendDailyDigestTestCase(unittest.TestCase):
         }
 
     @patch("app.send_digest.mark_articles_delivered")
+    @patch("app.send_digest.revalidate_published_edition")
     @patch("app.send_digest.send_email")
     @patch("app.send_digest.list_active_subscribers")
     @patch("app.send_digest.build_digest")
@@ -377,6 +378,7 @@ class SendDailyDigestTestCase(unittest.TestCase):
         build_digest,
         subscribers,
         send_email_mock,
+        revalidate,
         mark,
     ):
         build_digest.return_value = self._digest()
@@ -421,6 +423,7 @@ class SendDailyDigestTestCase(unittest.TestCase):
         mark.assert_called_once_with(
             article_ids=[7],
         )
+        revalidate.assert_called_once_with()
 
     @patch("app.send_digest.mark_articles_delivered")
     @patch("app.send_digest.send_email")

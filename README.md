@@ -278,6 +278,15 @@ Each recipient gets an individual message so unsubscribe links remain private.
 
 Delivery failures are isolated per recipient and do not prevent the remaining subscriber list from receiving the edition.
 
+Published editions are also available to the public site through `GET /digests` and
+`GET /digests/YYYY-MM-DD`. These read the articles already marked as delivered in
+SQLite, so past editions need no backfill and each new edition appears after a
+successful daily send. Unsent articles are never returned by these endpoints.
+After delivery, the sender calls the public site's authenticated revalidation
+endpoint. Set the same `DIGEST_REVALIDATE_TOKEN` in Railway and Vercel; the optional
+`DIGEST_SITE_URL` overrides the default `https://digest.joaoac.com`. Failed
+revalidation is logged and retried three times without repeating email delivery.
+
 The final email contains:
 
 - the article title;
@@ -298,6 +307,8 @@ Important values include:
 - `RESEND_API_KEY` — email delivery;
 - optional `RESEND_FROM` — sender identity;
 - `PUBLIC_BASE_URL` — public URL used for unsubscribe links;
+- `DIGEST_REVALIDATE_TOKEN` — shared secret for refreshing published pages;
+- optional `DIGEST_SITE_URL` — public site origin for the revalidation call;
 - optional `DIGEST_DB_PATH` — SQLite database path;
 - optional job/API configuration used by the production deployment.
 

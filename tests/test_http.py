@@ -78,6 +78,84 @@ class HttpApiTestCase(unittest.TestCase):
         self.assertNotIn(b"subscriber", payload.lower())
         self.assertNotIn(b"digest.db", payload)
 
+    def test_public_editions_include_delivered_articles_only(self):
+        with db.get_connection() as connection:
+            connection.executemany(
+                """
+                INSERT INTO articles (
+                    source, title, url, relevance_score, why_interesting,
+                    topics, delivered_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        "Example",
+                        "First story",
+                        "https://example.com/first",
+                        90,
+                        "Useful context",
+                        '["Developer tools"]',
+                        "2026-09-29 10:00:00",
+                    ),
+                    (
+                        "Other",
+                        "Second story",
+                        "https://example.com/second",
+                        80,
+                        "Worth reading",
+                        '["Security"]',
+                        "2026-09-29 10:00:00",
+                    ),
+                    (
+                        "Example",
+                        "New story",
+                        "https://example.com/new",
+                        70,
+                        "New context",
+                        '["AI research"]',
+                        "2026-09-30 10:00:00",
+                    ),
+                    (
+                        "Example",
+                        "Unsent",
+                        "https://example.com/unsent",
+                        99,
+                        "Not public yet",
+                        "[]",
+                        None,
+                    ),
+                ],
+            )
+
+        status, _headers, body = self.request("GET", "/digests")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            json.loads(body),
+            {
+                "editions": [
+                    {"date": "2026-09-30", "article_count": 1},
+                    {"date": "2026-09-29", "article_count": 2},
+                ]
+            },
+        )
+
+        status, _headers, body = self.request("GET", "/digests/2026-09-29")
+        self.assertEqual(status, 200)
+        edition = json.loads(body)
+        self.assertEqual(edition["date"], "2026-09-29")
+        self.assertEqual(
+            [article["title"] for article in edition["articles"]],
+            ["First story", "Second story"],
+        )
+        self.assertEqual(edition["articles"][0]["topics"], ["Developer tools"])
+        self.assertEqual(edition["articles"][0]["why_interesting"], "Useful context")
+        self.assertNotIn("Unsent", body.decode())
+
+        for path in ("/digests/2026-09-28", "/digests/2026-9-29", "/digests/nope"):
+            with self.subTest(path=path):
+                status, _headers, _body = self.request("GET", path)
+                self.assertEqual(status, 404)
+
     def test_subscribe_normalizes_and_hides_duplicates(self):
         origin = {"Origin": "https://digest.joaoac.com"}
         first_status, first_headers, first_body = self.post_json(

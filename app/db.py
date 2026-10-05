@@ -724,3 +724,58 @@ def get_latest_edition() -> dict | None:
         ),
         "articles": articles,
     }
+
+
+def list_public_editions() -> list[dict[str, str | int]]:
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT date(delivered_at) AS edition_date,
+                   COUNT(*) AS article_count
+            FROM articles
+            WHERE delivered_at IS NOT NULL
+            GROUP BY date(delivered_at)
+            ORDER BY edition_date DESC
+            """
+        ).fetchall()
+
+    return [
+        {"date": row["edition_date"], "article_count": row["article_count"]}
+        for row in rows
+    ]
+
+
+def get_public_edition(edition_date: str) -> dict | None:
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT source, title, url, published_at,
+                   why_interesting, topics
+            FROM articles
+            WHERE date(delivered_at) = ?
+            ORDER BY relevance_score DESC, discovered_at DESC, id DESC
+            """,
+            (edition_date,),
+        ).fetchall()
+
+    if not rows:
+        return None
+
+    articles = []
+    for row in rows:
+        try:
+            topics = json.loads(row["topics"] or "[]")
+        except json.JSONDecodeError:
+            topics = []
+        articles.append(
+            {
+                "title": row["title"],
+                "url": row["url"],
+                "source": row["source"],
+                "published_at": row["published_at"],
+                "why_interesting": row["why_interesting"],
+                "topics": topics,
+            }
+        )
+
+    return {"date": edition_date, "articles": articles}

@@ -12,6 +12,7 @@ from app.email import (
     send_email,
 )
 from app.log import log_event, redact_email, redact_text
+from app.publication import revalidate_published_edition
 from app.subscribers import (
     list_active_subscribers,
     unsubscribe_url,
@@ -118,6 +119,7 @@ def send_daily_digest() -> dict:
             for article in articles
         ]
         mark_articles_delivered(article_ids=article_ids)
+        revalidate_published_edition()
         print(f"Digest sent with {len(articles)} articles.")
         print(f"Emails sent: {sent}. Failed: {failed}.")
         print(

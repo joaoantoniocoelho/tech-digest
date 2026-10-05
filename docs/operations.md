@@ -72,6 +72,13 @@ python -m app.send_digest
 
 This sends the digest by email through Resend and marks the selected articles as delivered only after a successful send.
 
+After marking the articles delivered, it asks the public site to invalidate the
+archive, the new edition, and the previous edition. Set the same
+`DIGEST_REVALIDATE_TOKEN` in Railway and Vercel. `DIGEST_SITE_URL` optionally
+overrides `https://digest.joaoac.com` for local or alternate deployments. The
+notification retries three times; a failure is logged without repeating email
+delivery. The public site also refreshes cached pages after one hour.
+
 Set in `.env`:
 
 ```text
