@@ -6,10 +6,17 @@ import os
 import signal
 import threading
 import time
+from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
-from app.db import DB_PATH, get_connection, init_db
+from app.db import (
+    DB_PATH,
+    get_connection,
+    get_public_edition,
+    init_db,
+    list_public_editions,
+)
 from app.log import log_event, redact_text
 from app.notify import notify_subscriber
 from app.pipeline import start_job
@@ -213,6 +220,27 @@ class DigestHandler(BaseHTTPRequestHandler):
 
         if path == "/subscribe" and method == "POST":
             self._subscribe()
+            return
+
+        if path == "/digests" and method == "GET":
+            self._reply(200, {"editions": list_public_editions()})
+            return
+
+        if path.startswith("/digests/") and method == "GET":
+            edition_date = path.removeprefix("/digests/")
+            try:
+                parsed = date.fromisoformat(edition_date)
+            except ValueError:
+                self._reply(404, {"ok": False})
+                return
+            if parsed.isoformat() != edition_date:
+                self._reply(404, {"ok": False})
+                return
+            edition = get_public_edition(edition_date)
+            if edition is None:
+                self._reply(404, {"ok": False})
+                return
+            self._reply(200, edition)
             return
 
         if path.startswith("/unsubscribe/"):
