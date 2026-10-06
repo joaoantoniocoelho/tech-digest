@@ -78,6 +78,7 @@ def send_daily_digest() -> dict:
                     digest=digest,
                     show_score=show_score,
                     show_topics=show_topics,
+                    sent_at=sent_at,
                     unsubscribe_url=link,
                 ),
                 to=[subscriber["email"]],
@@ -118,7 +119,10 @@ def send_daily_digest() -> dict:
             article["id"]
             for article in articles
         ]
-        mark_articles_delivered(article_ids=article_ids)
+        mark_articles_delivered(
+            article_ids=article_ids,
+            delivered_at=sent_at,
+        )
         revalidate_published_edition()
         print(f"Digest sent with {len(articles)} articles.")
         print(f"Emails sent: {sent}. Failed: {failed}.")

@@ -9,6 +9,10 @@ DEFAULT_SITE_URL = "https://digest.joaoac.com"
 REVALIDATION_ATTEMPTS = 3
 
 
+def site_url() -> str:
+    return os.getenv("DIGEST_SITE_URL", DEFAULT_SITE_URL).rstrip("/")
+
+
 def revalidate_published_edition() -> bool:
     token = os.getenv("DIGEST_REVALIDATE_TOKEN", "").strip()
     if not token:
@@ -23,11 +27,10 @@ def revalidate_published_edition() -> bool:
 
         date = str(editions[0]["date"])
         previous_date = str(editions[1]["date"]) if len(editions) > 1 else None
-        site_url = os.getenv("DIGEST_SITE_URL", DEFAULT_SITE_URL).rstrip("/")
         for attempt in range(1, REVALIDATION_ATTEMPTS + 1):
             try:
                 response = httpx.post(
-                    f"{site_url}/api/revalidate",
+                    f"{site_url()}/api/revalidate",
                     headers={"Authorization": f"Bearer {token}"},
                     json={"date": date, "previousDate": previous_date},
                     timeout=5.0,

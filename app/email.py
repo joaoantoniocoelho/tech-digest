@@ -5,6 +5,7 @@ from datetime import datetime
 import httpx
 
 from app.db import _parse_article_datetime
+from app.share import edition_date, share_links
 
 
 RESEND_API_URL = "https://api.resend.com/emails"
@@ -283,6 +284,54 @@ def _render_story(
     )
 
 
+SHARE_TITLE = "Share this digest"
+SHARE_LINE = "Know someone who would like this edition? Send it their way."
+SHARE_LINK_LABEL = "Link to this edition"
+
+
+def digest_share_links(sent_at: datetime) -> dict[str, str]:
+    date = edition_date(sent_at)
+    _, long_date = _format_edition_date(datetime.fromisoformat(date))
+    text = (
+        f"Tech Digest, {long_date}: a short list of software "
+        "engineering articles worth reading."
+    )
+    return share_links(date, text)
+
+
+def _render_share(links: dict[str, str]) -> str:
+    link = (
+        f'{_sans()}font-size:13px;line-height:20px;'
+        f"color:{ACCENT};text-decoration:underline;"
+        "text-underline-offset:2px;"
+    )
+    parts = [
+        (
+            f'<a href="{_esc(links["link"])}" class="accent" style="{link}">'
+            f"{SHARE_LINK_LABEL}</a>"
+        ),
+        f'<a href="{_esc(links["x"])}" class="accent" style="{link}">X</a>',
+        (
+            f'<a href="{_esc(links["linkedin"])}" class="accent" style="{link}">'
+            "LinkedIn</a>"
+        ),
+    ]
+    separated = (
+        f'<span class="faint" style="color:{FAINT};">'
+        "&nbsp;&nbsp;·&nbsp;&nbsp;</span>"
+    ).join(parts)
+
+    return (
+        "<tr><td style=\"padding-top:40px;\">"
+        f'<p class="ink" style="margin:0;{_sans(500)}font-size:15px;'
+        f'line-height:22px;color:{INK};">{SHARE_TITLE}</p>'
+        f'<p class="copy" style="margin:4px 0 0;{_sans()}font-size:14px;'
+        f'line-height:20px;color:{COPY};">{SHARE_LINE}</p>'
+        f'<p style="margin:10px 0 0;">{separated}</p>'
+        "</td></tr>"
+    )
+
+
 def _render_footer(unsubscribe_url: str | None) -> str:
     link = (
         f'{_sans()}font-size:12px;line-height:18px;'
@@ -444,7 +493,11 @@ def render_html_digest(
     preheader = f"{weekday}, {long_date}. {edition}."
 
     if articles:
-        story_rows = _render_stories(articles, show_score, show_topics)
+        story_rows = (
+            _render_stories(articles, show_score, show_topics)
+            + "\n"
+            + _render_share(digest_share_links(sent_at))
+        )
     else:
         story_rows = _render_paragraph(
             "No articles passed the relevance threshold."
