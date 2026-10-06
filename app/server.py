@@ -8,7 +8,7 @@ import threading
 import time
 from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from app.db import (
     DB_PATH,
@@ -30,6 +30,9 @@ from app.welcome import queue_welcome_email
 
 
 MAX_BODY_BYTES = 4096
+EDITIONS_PAGE_SIZE = 20
+# Bounds the SQLite OFFSET; far beyond any realistic archive (20 editions/page).
+MAX_EDITIONS_PAGE = 100_000
 _JOBS = ("collect", "process", "send")
 _DEFAULT_ORIGINS = (
     "https://digest.joaoac.com",
@@ -223,7 +226,7 @@ class DigestHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/digests" and method == "GET":
-            self._reply(200, {"editions": list_public_editions()})
+            self._list_editions()
             return
 
         if path.startswith("/digests/") and method == "GET":
@@ -262,6 +265,40 @@ class DigestHandler(BaseHTTPRequestHandler):
                 return
 
         self._reply(404, {"ok": False})
+
+    def _list_editions(self) -> None:
+        page = self._requested_page()
+        if page is None:
+            self._reply(400, {"ok": False})
+            return
+
+        rows = list_public_editions(
+            limit=EDITIONS_PAGE_SIZE + 1,
+            offset=(page - 1) * EDITIONS_PAGE_SIZE,
+        )
+        self._reply(
+            200,
+            {
+                "editions": rows[:EDITIONS_PAGE_SIZE],
+                "page": page,
+                "has_more": len(rows) > EDITIONS_PAGE_SIZE,
+            },
+        )
+
+    def _requested_page(self) -> int | None:
+        query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+        values = query.get("page")
+        if values is None:
+            return 1
+        if len(values) != 1:
+            return None
+        raw = values[0]
+        if not raw.isascii() or not raw.isdigit() or raw.startswith("0"):
+            return None
+        if len(raw) > len(str(MAX_EDITIONS_PAGE)):
+            return None
+        page = int(raw)
+        return page if page <= MAX_EDITIONS_PAGE else None
 
     def _subscribe(self) -> None:
         if not rate_limiter.allow(self._client_ip()):

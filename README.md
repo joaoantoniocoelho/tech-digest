@@ -282,6 +282,18 @@ Published editions are also available to the public site through `GET /digests` 
 `GET /digests/YYYY-MM-DD`. These read the articles already marked as delivered in
 SQLite, so past editions need no backfill and each new edition appears after a
 successful daily send. Unsent articles are never returned by these endpoints.
+
+`GET /digests` is paginated, 20 editions per page, newest first. The optional
+`page` query parameter is a positive integer (default `1`); any other value returns
+`400`, and a page past the end returns an empty list:
+
+```json
+{"editions": [{"date": "2026-10-05", "article_count": 8}], "page": 1, "has_more": true}
+```
+
+`GET /digests/YYYY-MM-DD` also returns `older_date` and `newer_date`, the adjacent
+published editions (or `null`), so the site can link between editions without
+loading the archive.
 After delivery, the sender calls the public site's authenticated revalidation
 endpoint. Set the same `DIGEST_REVALIDATE_TOKEN` in Railway and Vercel; the optional
 `DIGEST_SITE_URL` overrides the default `https://digest.joaoac.com`. Failed
