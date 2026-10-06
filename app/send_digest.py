@@ -78,6 +78,7 @@ def send_daily_digest() -> dict:
                     digest=digest,
                     show_score=show_score,
                     show_topics=show_topics,
+                    sent_at=sent_at,
                     unsubscribe_url=link,
                 ),
                 to=[subscriber["email"]],
@@ -101,6 +102,10 @@ def send_daily_digest() -> dict:
             recipient=recipient,
             resend_id=result.get("id", ""),
         )
+        # Publish right after the first successful send: the email links to the
+        # public edition, which 404s until the articles are marked delivered.
+        if sent == 1:
+            _publish_edition(articles, sent_at)
 
     summary["sent"] = sent
     summary["failed_sends"] = failed
@@ -114,22 +119,24 @@ def send_daily_digest() -> dict:
     )
 
     if sent:
-        article_ids = [
-            article["id"]
-            for article in articles
-        ]
-        mark_articles_delivered(article_ids=article_ids)
-        revalidate_published_edition()
         print(f"Digest sent with {len(articles)} articles.")
         print(f"Emails sent: {sent}. Failed: {failed}.")
         print(
-            f"Marked {len(article_ids)} articles as delivered."
+            f"Marked {len(articles)} articles as delivered."
         )
         return summary
 
     raise RuntimeError(
         f"Digest email failed for all {failed} subscribers"
     )
+
+
+def _publish_edition(articles: list[dict], sent_at: datetime) -> None:
+    mark_articles_delivered(
+        article_ids=[article["id"] for article in articles],
+        delivered_at=sent_at,
+    )
+    revalidate_published_edition()
 
 
 def main():

@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 runpy.run_path(str(Path(__file__).with_name("_bootstrap.py")))
 
+from app.digest import render_text_digest
 from app.email import (
     DEFAULT_FROM,
     digest_subject,
@@ -204,6 +205,71 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
             digest_subject(SENT_AT),
             "João Coelho Tech Digest — Sep 22, 2026",
         )
+
+
+class ShareDigestTestCase(unittest.TestCase):
+    def test_html_links_to_utc_edition_with_refs(self):
+        html = render_html_digest(digest=_digest(), sent_at=SENT_AT)
+
+        self.assertIn("Share this digest", html)
+        edition = "https://digest.joaoac.com/digest/2026-09-22"
+        self.assertIn(f'href="{edition}?ref=share"', html)
+        self.assertIn(
+            'href="https://x.com/intent/post?text=Tech+Digest%2C+'
+            "September+22%2C+2026%3A+a+short+list+of+software+engineering"
+            "+articles+worth+reading.&amp;url=https%3A%2F%2Fdigest.joaoac.com"
+            '%2Fdigest%2F2026-09-22%3Fref%3Dx"',
+            html,
+        )
+        self.assertIn(
+            'href="https://www.linkedin.com/sharing/share-offsite/?url='
+            'https%3A%2F%2Fdigest.joaoac.com%2Fdigest%2F2026-09-22'
+            '%3Fref%3Dlinkedin"',
+            html,
+        )
+
+    def test_late_local_send_uses_next_utc_date(self):
+        late = datetime(2026, 9, 22, 22, 30, tzinfo=timezone(timedelta(hours=-3)))
+
+        html = render_html_digest(digest=_digest(), sent_at=late)
+
+        self.assertIn("/digest/2026-09-23?ref=share", html)
+        self.assertIn("September+23%2C+2026", html)
+
+    def test_uses_configured_site_url(self):
+        with patch.dict(os.environ, {"DIGEST_SITE_URL": "http://localhost:3000/"}):
+            html = render_html_digest(digest=_digest(), sent_at=SENT_AT)
+
+        self.assertIn('href="http://localhost:3000/digest/2026-09-22?ref=share"', html)
+
+    def test_empty_digest_has_no_share_block(self):
+        html = render_html_digest(
+            digest={"lookback_hours": 24, "articles": []},
+            sent_at=SENT_AT,
+        )
+
+        self.assertNotIn("Share this digest", html)
+
+    def test_text_lists_share_links(self):
+        text = render_text_digest(digest=_digest(), sent_at=SENT_AT)
+
+        self.assertIn(
+            "Share this digest\n"
+            "Know someone who would like this edition? Send it their way.\n"
+            "Link to this edition: "
+            "https://digest.joaoac.com/digest/2026-09-22?ref=share\n"
+            "X: https://x.com/intent/post?text=Tech+Digest",
+            text,
+        )
+        self.assertIn(
+            "LinkedIn: https://www.linkedin.com/sharing/share-offsite/?url="
+            "https%3A%2F%2Fdigest.joaoac.com%2Fdigest%2F2026-09-22"
+            "%3Fref%3Dlinkedin",
+            text,
+        )
+
+    def test_text_without_send_time_has_no_share_block(self):
+        self.assertNotIn("Share this digest", render_text_digest(digest=_digest()))
 
 
 class SendEmailTestCase(unittest.TestCase):
@@ -420,9 +486,59 @@ class SendDailyDigestTestCase(unittest.TestCase):
             "Unsubscribe: https://api.digest.joaoac.com/unsubscribe/token-reader-1",
             kwargs["text"],
         )
-        mark.assert_called_once_with(
-            article_ids=[7],
+        mark.assert_called_once()
+        self.assertEqual(mark.call_args.kwargs["article_ids"], [7])
+        delivered_at = mark.call_args.kwargs["delivered_at"]
+        edition = (
+            "https://digest.joaoac.com/digest/"
+            + delivered_at.astimezone(timezone.utc).date().isoformat()
         )
+        self.assertIn(edition + "?ref=share", kwargs["html_body"])
+        self.assertIn(
+            f"Link to this edition: {edition}?ref=share",
+            kwargs["text"],
+        )
+        revalidate.assert_called_once_with()
+
+    @patch("app.send_digest.mark_articles_delivered")
+    @patch("app.send_digest.revalidate_published_edition")
+    @patch("app.send_digest.send_email")
+    @patch("app.send_digest.list_active_subscribers")
+    @patch("app.send_digest.build_digest")
+    def test_publishes_edition_after_first_successful_send(
+        self,
+        build_digest,
+        subscribers,
+        send_email_mock,
+        revalidate,
+        mark,
+    ):
+        build_digest.return_value = self._digest()
+        subscribers.return_value = [
+            self._subscriber("one@example.com", "token-one-aaaa"),
+            self._subscriber("two@example.com", "token-two-bbbb"),
+            self._subscriber("three@example.com", "token-three-cc"),
+        ]
+        published_before_send = []
+
+        def send(**kwargs):
+            published_before_send.append(
+                (mark.call_count, revalidate.call_count)
+            )
+            if kwargs["to"] == ["one@example.com"]:
+                raise RuntimeError("Resend API error (422): bad")
+            return {"id": "email"}
+
+        send_email_mock.side_effect = send
+
+        with patch.dict(
+            os.environ,
+            {"PUBLIC_BASE_URL": "https://api.digest.joaoac.com"},
+        ), redirect_stdout(StringIO()):
+            send_daily_digest()
+
+        self.assertEqual(published_before_send, [(0, 0), (0, 0), (1, 1)])
+        mark.assert_called_once()
         revalidate.assert_called_once_with()
 
     @patch("app.send_digest.mark_articles_delivered")
@@ -490,7 +606,8 @@ class SendDailyDigestTestCase(unittest.TestCase):
         self.assertIn("token-two-bbbb", second["html_body"])
         self.assertNotIn("two@example.com", first["html_body"])
         self.assertNotIn("one@example.com", second["html_body"])
-        mark.assert_called_once_with(article_ids=[7])
+        mark.assert_called_once()
+        self.assertEqual(mark.call_args.kwargs["article_ids"], [7])
         logged = output.getvalue()
         self.assertNotIn("token-one-aaaa", logged)
         self.assertNotIn("token-two-bbbb", logged)

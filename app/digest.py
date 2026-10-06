@@ -1,4 +1,5 @@
 import argparse
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -9,9 +10,13 @@ from app.db import (
     init_db,
 )
 from app.email import (
+    SHARE_LINE,
+    SHARE_LINK_LABEL,
+    SHARE_TITLE,
     WELCOME_FIRST,
     WELCOME_LATEST,
     WELCOME_LINES,
+    digest_share_links,
 )
 from app.log import log_event
 
@@ -170,6 +175,7 @@ def render_text_digest(
     digest: dict,
     show_score: bool = True,
     show_topics: bool = True,
+    sent_at: datetime | None = None,
     unsubscribe_url: str | None = None,
 ) -> str:
     articles = digest["articles"]
@@ -239,6 +245,20 @@ def render_text_digest(
             lines.append("")
             lines.append("-" * 60)
             lines.append("")
+
+    if sent_at:
+        links = digest_share_links(sent_at)
+        lines.extend(
+            [
+                "",
+                "",
+                SHARE_TITLE,
+                SHARE_LINE,
+                f"{SHARE_LINK_LABEL}: {links['link']}",
+                f"X: {links['x']}",
+                f"LinkedIn: {links['linkedin']}",
+            ]
+        )
 
     if unsubscribe_url:
         lines.append("")

@@ -684,6 +684,7 @@ def get_digest_candidates(
 
 def mark_articles_delivered(
     article_ids: list[int],
+    delivered_at: datetime | None = None,
 ):
     if not article_ids:
         return
@@ -692,16 +693,21 @@ def mark_articles_delivered(
         "?"
         for _ in article_ids
     )
+    # Same UTC format as CURRENT_TIMESTAMP, so string MAX() and date() keep
+    # working; an explicit send time keeps the edition date the email links to.
+    timestamp = (
+        delivered_at or datetime.now(timezone.utc)
+    ).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
     with get_connection() as connection:
         connection.execute(
             f"""
             UPDATE articles
-            SET delivered_at = CURRENT_TIMESTAMP
+            SET delivered_at = ?
             WHERE id IN ({placeholders})
               AND delivered_at IS NULL
             """,
-            article_ids,
+            [timestamp, *article_ids],
         )
 
 
