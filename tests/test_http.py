@@ -4,6 +4,7 @@ import tempfile
 import threading
 import time
 import unittest
+from datetime import date, timedelta
 from http.client import HTTPConnection
 from pathlib import Path
 from unittest.mock import patch
@@ -135,7 +136,9 @@ class HttpApiTestCase(unittest.TestCase):
                 "editions": [
                     {"date": "2026-09-30", "article_count": 1},
                     {"date": "2026-09-29", "article_count": 2},
-                ]
+                ],
+                "page": 1,
+                "has_more": False,
             },
         )
 
@@ -150,11 +153,105 @@ class HttpApiTestCase(unittest.TestCase):
         self.assertEqual(edition["articles"][0]["topics"], ["Developer tools"])
         self.assertEqual(edition["articles"][0]["why_interesting"], "Useful context")
         self.assertNotIn("Unsent", body.decode())
+        self.assertIsNone(edition["older_date"])
+        self.assertEqual(edition["newer_date"], "2026-09-30")
 
         for path in ("/digests/2026-09-28", "/digests/2026-9-29", "/digests/nope"):
             with self.subTest(path=path):
                 status, _headers, _body = self.request("GET", path)
                 self.assertEqual(status, 404)
+
+    def insert_editions(self, count):
+        first = date(2026, 1, 1)
+        days = [first + timedelta(days=offset) for offset in range(count)]
+        with db.get_connection() as connection:
+            connection.executemany(
+                """
+                INSERT INTO articles (source, title, url, delivered_at)
+                VALUES ('Example', ?, ?, ?)
+                """,
+                [
+                    (
+                        f"Story {day.isoformat()}",
+                        f"https://example.com/{day.isoformat()}",
+                        f"{day.isoformat()} 10:00:00",
+                    )
+                    for day in days
+                ],
+            )
+        return [day.isoformat() for day in reversed(days)]
+
+    def get_json(self, path):
+        status, _headers, body = self.request("GET", path)
+        return status, json.loads(body)
+
+    def test_public_editions_are_paginated_newest_first(self):
+        expected = self.insert_editions(45)
+
+        cases = (
+            ("/digests", 1, expected[:20], True),
+            ("/digests?page=1", 1, expected[:20], True),
+            ("/digests?page=2", 2, expected[20:40], True),
+            ("/digests?page=3", 3, expected[40:], False),
+            ("/digests?page=4", 4, [], False),
+        )
+        for path, page, dates, has_more in cases:
+            with self.subTest(path=path):
+                status, payload = self.get_json(path)
+                self.assertEqual(status, 200)
+                self.assertEqual(payload["page"], page)
+                self.assertEqual(payload["has_more"], has_more)
+                self.assertEqual(
+                    [edition["date"] for edition in payload["editions"]], dates
+                )
+
+    def test_exact_page_boundary_has_no_next_page(self):
+        self.insert_editions(20)
+
+        status, payload = self.get_json("/digests")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(len(payload["editions"]), 20)
+        self.assertFalse(payload["has_more"])
+
+    def test_empty_archive_returns_empty_first_page(self):
+        status, payload = self.get_json("/digests")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, {"editions": [], "page": 1, "has_more": False})
+
+    def test_invalid_page_is_rejected(self):
+        for query in (
+            "page=0",
+            "page=-1",
+            "page=01",
+            "page=1.5",
+            "page=abc",
+            "page=",
+            "page=%C2%B2",
+            "page=1&page=2",
+            "page=100001",
+            "page=" + "9" * 5000,
+        ):
+            with self.subTest(query=query[:20]):
+                status, payload = self.get_json(f"/digests?{query}")
+                self.assertEqual(status, 400)
+                self.assertEqual(payload, {"ok": False})
+
+    def test_edition_includes_neighbor_dates(self):
+        dates = list(reversed(self.insert_editions(3)))
+
+        cases = (
+            (dates[0], None, dates[1]),
+            (dates[1], dates[0], dates[2]),
+            (dates[2], dates[1], None),
+        )
+        for edition_date, older, newer in cases:
+            with self.subTest(date=edition_date):
+                status, payload = self.get_json(f"/digests/{edition_date}")
+                self.assertEqual(status, 200)
+                self.assertEqual(payload["older_date"], older)
+                self.assertEqual(payload["newer_date"], newer)
 
     def test_subscribe_normalizes_and_hides_duplicates(self):
         origin = {"Origin": "https://digest.joaoac.com"}

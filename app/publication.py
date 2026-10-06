@@ -16,7 +16,7 @@ def revalidate_published_edition() -> bool:
         return False
 
     try:
-        editions = list_public_editions()
+        editions = list_public_editions(limit=2)
         if not editions:
             log_event("digest_revalidate", status="skipped", reason="no_editions")
             return False

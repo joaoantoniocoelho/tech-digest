@@ -726,7 +726,9 @@ def get_latest_edition() -> dict | None:
     }
 
 
-def list_public_editions() -> list[dict[str, str | int]]:
+def list_public_editions(
+    limit: int, offset: int = 0
+) -> list[dict[str, str | int]]:
     with get_connection() as connection:
         rows = connection.execute(
             """
@@ -736,7 +738,9 @@ def list_public_editions() -> list[dict[str, str | int]]:
             WHERE delivered_at IS NOT NULL
             GROUP BY date(delivered_at)
             ORDER BY edition_date DESC
-            """
+            LIMIT ? OFFSET ?
+            """,
+            (limit, offset),
         ).fetchall()
 
     return [
@@ -757,9 +761,20 @@ def get_public_edition(edition_date: str) -> dict | None:
             """,
             (edition_date,),
         ).fetchall()
-
-    if not rows:
-        return None
+        if not rows:
+            return None
+        neighbors = connection.execute(
+            """
+            SELECT
+                (SELECT MAX(date(delivered_at)) FROM articles
+                 WHERE delivered_at IS NOT NULL
+                   AND date(delivered_at) < ?) AS older_date,
+                (SELECT MIN(date(delivered_at)) FROM articles
+                 WHERE delivered_at IS NOT NULL
+                   AND date(delivered_at) > ?) AS newer_date
+            """,
+            (edition_date, edition_date),
+        ).fetchone()
 
     articles = []
     for row in rows:
@@ -778,4 +793,9 @@ def get_public_edition(edition_date: str) -> dict | None:
             }
         )
 
-    return {"date": edition_date, "articles": articles}
+    return {
+        "date": edition_date,
+        "articles": articles,
+        "older_date": neighbors["older_date"],
+        "newer_date": neighbors["newer_date"],
+    }
