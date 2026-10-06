@@ -270,6 +270,27 @@ Subscribers can unsubscribe through a unique tokenized link included in each ema
 
 Repeated subscriptions are idempotent, and a previously unsubscribed address can be reactivated by subscribing again. The welcome email is sent only when an address becomes active, not on repeat subscriptions.
 
+`POST /subscribe` takes a JSON body with a required `email` and optional attribution strings:
+
+```json
+{
+  "email": "reader@example.com",
+  "acquisition_source": "linkedin",
+  "acquisition_url": "https://joaoac.com/digest/2026-09-29",
+  "utm_source": "linkedin",
+  "utm_medium": "social",
+  "utm_campaign": "launch"
+}
+```
+
+`acquisition_source` is the page's `?ref=` value (for example `x`, `linkedin`, `shipclub`, `joaoac`). The frontend sends `direct` when the visit has neither `ref` nor UTM parameters (with UTMs only, the source is omitted), so a `NULL` source means the subscriber predates tracking, came through an older client, or arrived through a UTM-only campaign link.
+
+Attribution is best-effort and never makes a valid signup fail. Non-string values are ignored, non-printable characters (control characters, line breaks, zero-width characters, non-breaking spaces, lone surrogates) are removed, values are trimmed, `acquisition_source` is lowercased, and oversized values are truncated: 64 characters for the source, 2048 for the URL, and 128 for each UTM field. Missing or empty values are stored as `NULL`.
+
+The request body is limited to 8192 bytes; larger bodies get `413`. A worst-case payload within the field limits (254-character email, 2048-character percent-encoded URL, 64-character source and 128-character UTMs with JSON-escaped non-ASCII text) stays under that budget. The frontend truncates fields to the same limits before sending and sends only the page origin and path as `acquisition_url`.
+
+Attribution and `created_at` (the signup date) are first-touch: they are written only when the subscriber row is created, so repeat subscriptions and reactivations keep the original values. `subscribed_at` is the latest activation time and is reset on reactivation. Rows created before `created_at` existed were backfilled from `subscribed_at`.
+
 ## Delivery
 
 Tech Digest generates one final edition and sends it to all active subscribers through Resend.
