@@ -70,12 +70,14 @@ This selects recent classified articles, applies the relevance threshold (`minim
 python -m app.send_digest
 ```
 
-This sends the digest by email through Resend and marks the selected articles as delivered only after a successful send.
+This sends the digest by email through Resend and marks the selected articles as delivered right after the first successful send, so the edition link in the email works for the remaining recipients. If every send fails, nothing is marked.
 
 After marking the articles delivered, it asks the public site to invalidate the
 archive, the new edition, and the previous edition. Set the same
 `DIGEST_REVALIDATE_TOKEN` in Railway and Vercel. `DIGEST_SITE_URL` optionally
-overrides `https://digest.joaoac.com` for local or alternate deployments. The
+overrides `https://digest.joaoac.com`; it is also the origin of the share links in
+the email, so point it at a local or alternate deployment only when sending test
+emails, never for a real send. The
 notification retries three times; a failure is logged without repeating email
 delivery. The public site also refreshes cached pages after one hour.
 

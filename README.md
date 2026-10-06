@@ -315,8 +315,11 @@ successful daily send. Unsent articles are never returned by these endpoints.
 `GET /digests/YYYY-MM-DD` also returns `older_date` and `newer_date`, the adjacent
 published editions (or `null`), so the site can link between editions without
 loading the archive.
-After delivery, the sender calls the public site's authenticated revalidation
-endpoint. Set the same `DIGEST_REVALIDATE_TOKEN` in Railway and Vercel; the optional
+Right after the first successful send, the sender marks the articles delivered
+(stamped with the send time, so the edition date matches the email's share links)
+and calls the public site's authenticated revalidation endpoint. Publishing before
+the remaining sends keeps the edition link in the email from returning `404`. Set
+the same `DIGEST_REVALIDATE_TOKEN` in Railway and Vercel; the optional
 `DIGEST_SITE_URL` overrides the default `https://digest.joaoac.com`. Failed
 revalidation is logged and retried three times without repeating email delivery.
 
@@ -325,7 +328,9 @@ The final email contains:
 - the article title;
 - source and publication date;
 - compact `Why` labels;
-- a direct link to the original article.
+- a direct link to the original article;
+- a "Share this digest" block with links to the public edition, X and LinkedIn,
+  tagged `ref=share`, `ref=x` and `ref=linkedin`.
 
 ## Configuration
 
@@ -341,7 +346,8 @@ Important values include:
 - optional `RESEND_FROM` — sender identity;
 - `PUBLIC_BASE_URL` — public URL used for unsubscribe links;
 - `DIGEST_REVALIDATE_TOKEN` — shared secret for refreshing published pages;
-- optional `DIGEST_SITE_URL` — public site origin for the revalidation call;
+- optional `DIGEST_SITE_URL` — public site origin for the revalidation call and the
+  share links in the email (subscribers see it, so keep it on the production origin);
 - optional `DIGEST_DB_PATH` — SQLite database path;
 - optional job/API configuration used by the production deployment.
 

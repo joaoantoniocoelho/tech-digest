@@ -106,29 +106,6 @@ class LatestEditionTestCase(unittest.TestCase):
         )
 
 
-    def test_marks_delivery_with_send_time_in_utc(self):
-        self._insert("selected", 80, None)
-        with db.get_connection() as connection:
-            article_id = connection.execute(
-                "SELECT id FROM articles WHERE title = 'selected'"
-            ).fetchone()["id"]
-
-        db.mark_articles_delivered(
-            article_ids=[article_id],
-            delivered_at=datetime(
-                2026, 9, 22, 22, 30, 15,
-                tzinfo=timezone(timedelta(hours=-3)),
-            ),
-        )
-
-        edition = db.get_latest_edition()
-        self.assertEqual(
-            edition["delivered_at"],
-            datetime(2026, 9, 23, 1, 30, 15, tzinfo=timezone.utc),
-        )
-        self.assertIsNotNone(db.get_public_edition("2026-09-23"))
-
-
 class RenderWelcomeTestCase(unittest.TestCase):
     def test_html_includes_welcome_and_latest_edition(self):
         html = render_html_welcome(

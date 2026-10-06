@@ -501,6 +501,47 @@ class SendDailyDigestTestCase(unittest.TestCase):
         revalidate.assert_called_once_with()
 
     @patch("app.send_digest.mark_articles_delivered")
+    @patch("app.send_digest.revalidate_published_edition")
+    @patch("app.send_digest.send_email")
+    @patch("app.send_digest.list_active_subscribers")
+    @patch("app.send_digest.build_digest")
+    def test_publishes_edition_after_first_successful_send(
+        self,
+        build_digest,
+        subscribers,
+        send_email_mock,
+        revalidate,
+        mark,
+    ):
+        build_digest.return_value = self._digest()
+        subscribers.return_value = [
+            self._subscriber("one@example.com", "token-one-aaaa"),
+            self._subscriber("two@example.com", "token-two-bbbb"),
+            self._subscriber("three@example.com", "token-three-cc"),
+        ]
+        published_before_send = []
+
+        def send(**kwargs):
+            published_before_send.append(
+                (mark.call_count, revalidate.call_count)
+            )
+            if kwargs["to"] == ["one@example.com"]:
+                raise RuntimeError("Resend API error (422): bad")
+            return {"id": "email"}
+
+        send_email_mock.side_effect = send
+
+        with patch.dict(
+            os.environ,
+            {"PUBLIC_BASE_URL": "https://api.digest.joaoac.com"},
+        ), redirect_stdout(StringIO()):
+            send_daily_digest()
+
+        self.assertEqual(published_before_send, [(0, 0), (0, 0), (1, 1)])
+        mark.assert_called_once()
+        revalidate.assert_called_once_with()
+
+    @patch("app.send_digest.mark_articles_delivered")
     @patch("app.send_digest.send_email")
     @patch("app.send_digest.list_active_subscribers")
     @patch("app.send_digest.build_digest")
