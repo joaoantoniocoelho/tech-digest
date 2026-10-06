@@ -22,6 +22,7 @@ from app.notify import notify_subscriber
 from app.pipeline import start_job
 from app.scheduler import Scheduler
 from app.subscribers import (
+    normalize_attribution,
     subscribe_email,
     token_is_known,
     unsubscribe_with_token,
@@ -29,7 +30,7 @@ from app.subscribers import (
 from app.welcome import queue_welcome_email
 
 
-MAX_BODY_BYTES = 4096
+MAX_BODY_BYTES = 8192
 EDITIONS_PAGE_SIZE = 20
 # Bounds the SQLite OFFSET; far beyond any realistic archive (20 editions/page).
 MAX_EDITIONS_PAGE = 100_000
@@ -311,7 +312,10 @@ class DigestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            subscriber = subscribe_email(payload.get("email"))
+            subscriber = subscribe_email(
+                payload.get("email"),
+                normalize_attribution(payload),
+            )
         except ValueError:
             self._reply(400, {"ok": False})
             return

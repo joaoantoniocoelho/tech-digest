@@ -285,6 +285,190 @@ class HttpApiTestCase(unittest.TestCase):
         self.assertEqual(subscriber["email"], "reader@example.com")
         self.assertGreaterEqual(len(subscriber["unsubscribe_token"]), 20)
 
+    def _attribution_row(self, email="reader@example.com"):
+        with db.get_connection() as connection:
+            return dict(
+                connection.execute(
+                    """
+                    SELECT status, acquisition_source, acquisition_url,
+                           utm_source, utm_medium, utm_campaign
+                    FROM subscribers
+                    WHERE email = ?
+                    """,
+                    (email,),
+                ).fetchone()
+            )
+
+    def test_subscribe_persists_acquisition_attribution(self):
+        status, _headers, payload = self.post_json(
+            "/subscribe",
+            {
+                "email": "reader@example.com",
+                "acquisition_source": " X ",
+                "acquisition_url": "https://joaoac.com/digest/2026-09-29?ref=x",
+                "utm_source": "twitter",
+                "utm_medium": "social",
+                "utm_campaign": "launch",
+            },
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(payload), {"ok": True})
+        self.assertEqual(
+            self._attribution_row(),
+            {
+                "status": "active",
+                "acquisition_source": "x",
+                "acquisition_url": "https://joaoac.com/digest/2026-09-29?ref=x",
+                "utm_source": "twitter",
+                "utm_medium": "social",
+                "utm_campaign": "launch",
+            },
+        )
+
+    def test_subscribe_without_attribution_stores_nulls(self):
+        status, _headers, payload = self.post_json(
+            "/subscribe",
+            {"email": "reader@example.com"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(payload), {"ok": True})
+        self.assertEqual(
+            self._attribution_row(),
+            {
+                "status": "active",
+                "acquisition_source": None,
+                "acquisition_url": None,
+                "utm_source": None,
+                "utm_medium": None,
+                "utm_campaign": None,
+            },
+        )
+        self.queue_welcome.assert_called_once()
+
+    def test_subscribe_ignores_invalid_attribution(self):
+        status, _headers, payload = self.post_json(
+            "/subscribe",
+            {
+                "email": "reader@example.com",
+                "acquisition_source": 42,
+                "acquisition_url": ["https://example.com"],
+                "utm_source": {"nested": True},
+                "utm_medium": "   ",
+                "utm_campaign": "c" * 1000,
+            },
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(payload), {"ok": True})
+        row = self._attribution_row()
+        self.assertEqual(row["status"], "active")
+        self.assertIsNone(row["acquisition_source"])
+        self.assertIsNone(row["acquisition_url"])
+        self.assertIsNone(row["utm_source"])
+        self.assertIsNone(row["utm_medium"])
+        self.assertEqual(row["utm_campaign"], "c" * 128)
+
+    def test_resubscribe_keeps_first_touch_attribution(self):
+        first_status, _headers, _payload = self.post_json(
+            "/subscribe",
+            {"email": "reader@example.com", "acquisition_source": "shipclub"},
+        )
+        second_status, _headers, _payload = self.post_json(
+            "/subscribe",
+            {
+                "email": "reader@example.com",
+                "acquisition_source": "linkedin",
+                "utm_campaign": "later",
+            },
+        )
+        self.assertEqual(first_status, 200)
+        self.assertEqual(second_status, 200)
+        row = self._attribution_row()
+        self.assertEqual(row["acquisition_source"], "shipclub")
+        self.assertIsNone(row["utm_campaign"])
+
+    def test_reactivation_keeps_first_touch_attribution_and_created_at(self):
+        status, _headers, _payload = self.post_json(
+            "/subscribe",
+            {"email": "reader@example.com", "acquisition_source": "x"},
+        )
+        self.assertEqual(status, 200)
+        with db.get_connection() as connection:
+            original = connection.execute(
+                "SELECT created_at, unsubscribe_token FROM subscribers"
+            ).fetchone()
+            connection.execute(
+                "UPDATE subscribers SET created_at = '2026-01-01T00:00:00+00:00'"
+            )
+
+        unsubscribe_status, _headers, _body = self.request(
+            "POST",
+            f"/unsubscribe/{original['unsubscribe_token']}",
+        )
+        self.assertEqual(unsubscribe_status, 200)
+
+        status, _headers, payload = self.post_json(
+            "/subscribe",
+            {
+                "email": "reader@example.com",
+                "acquisition_source": "linkedin",
+                "utm_source": "li",
+            },
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(payload), {"ok": True})
+        row = self._attribution_row()
+        self.assertEqual(row["status"], "active")
+        self.assertEqual(row["acquisition_source"], "x")
+        self.assertIsNone(row["utm_source"])
+        with db.get_connection() as connection:
+            created_at = connection.execute(
+                "SELECT created_at FROM subscribers"
+            ).fetchone()["created_at"]
+        self.assertEqual(created_at, "2026-01-01T00:00:00+00:00")
+        self.assertEqual(self.queue_welcome.call_count, 2)
+
+    def test_subscribe_accepts_attribution_at_maximum_lengths(self):
+        local_part = "a" * 64
+        domain = ".".join(["b" * 61, "c" * 61, "d" * 61, "com"])
+        email = f"{local_part}@{domain}"
+        self.assertEqual(len(email), 254)
+        url = "https://joaoac.com/digest/" + "%C3%A9" * 400
+        url = url[:2048]
+        payload = {
+            "email": email,
+            "acquisition_source": "é" * 64,
+            "acquisition_url": url,
+            "utm_source": "é" * 128,
+            "utm_medium": "é" * 128,
+            "utm_campaign": "é" * 128,
+        }
+        body = json.dumps(payload).encode("utf-8")
+        self.assertGreater(len(body), 4096)
+        self.assertLessEqual(len(body), 8192)
+
+        status, _headers, response = self.request(
+            "POST",
+            "/subscribe",
+            body=body,
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(response), {"ok": True})
+        row = self._attribution_row(email)
+        self.assertEqual(row["acquisition_url"], url)
+        self.assertEqual(row["utm_campaign"], "é" * 128)
+
+    def test_subscribe_drops_lone_surrogates_in_attribution(self):
+        status, _headers, payload = self.request(
+            "POST",
+            "/subscribe",
+            body=b'{"email":"reader@example.com","utm_source":"a\\ud800b"}',
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(payload), {"ok": True})
+        self.assertEqual(self._attribution_row()["utm_source"], "ab")
+
     def test_invalid_email_and_body_limits(self):
         status, _headers, payload = self.post_json(
             "/subscribe",
@@ -296,7 +480,7 @@ class HttpApiTestCase(unittest.TestCase):
         oversized = self.request(
             "POST",
             "/subscribe",
-            body=b'{"email":"%s@example.com"}' % (b"a" * 5000),
+            body=b'{"email":"%s@example.com"}' % (b"a" * 9000),
             headers={"Content-Type": "application/json"},
         )
         self.assertEqual(oversized[0], 413)

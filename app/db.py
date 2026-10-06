@@ -25,6 +25,14 @@ def _resolve_db_path() -> Path:
 
 DB_PATH = _resolve_db_path()
 
+SUBSCRIBER_ATTRIBUTION_COLUMNS = (
+    "acquisition_source",
+    "acquisition_url",
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+)
+
 
 @contextmanager
 def get_connection():
@@ -143,8 +151,37 @@ def init_db():
                 status TEXT NOT NULL,
                 subscribed_at TEXT NOT NULL,
                 unsubscribed_at TEXT,
-                unsubscribe_token TEXT NOT NULL UNIQUE
+                unsubscribe_token TEXT NOT NULL UNIQUE,
+                created_at TEXT,
+                acquisition_source TEXT,
+                acquisition_url TEXT,
+                utm_source TEXT,
+                utm_medium TEXT,
+                utm_campaign TEXT
             )
+            """
+        )
+
+        subscriber_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(subscribers)"
+            )
+        }
+
+        for column in ("created_at", *SUBSCRIBER_ATTRIBUTION_COLUMNS):
+            if column not in subscriber_columns:
+                connection.execute(
+                    f"ALTER TABLE subscribers ADD COLUMN {column} TEXT"
+                )
+
+        # Rows from before created_at existed: subscribed_at is the best
+        # available signup date, although a past reactivation may have reset it.
+        connection.execute(
+            """
+            UPDATE subscribers
+            SET created_at = subscribed_at
+            WHERE created_at IS NULL
             """
         )
 
