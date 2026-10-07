@@ -2,6 +2,7 @@ import json
 import runpy
 import tempfile
 import threading
+import time
 import unittest
 from http.client import HTTPConnection
 from pathlib import Path
@@ -193,6 +194,14 @@ class SubscriberAlertTestCase(unittest.TestCase):
         connection.close()
         return status
 
+    def wait_for(self, condition):
+        # The handler replies before notifying, so side effects can land after the response.
+        deadline = time.monotonic() + 2
+        while not condition():
+            if time.monotonic() > deadline:
+                self.fail("side effect did not happen after the response")
+            time.sleep(0.01)
+
     def test_http_notifies_signup_once_and_unsubscribe(self):
         alerts = []
         with (
@@ -206,6 +215,7 @@ class SubscriberAlertTestCase(unittest.TestCase):
                 self.post_json("/subscribe", {"email": "Reader@Example.com"}),
                 200,
             )
+            self.wait_for(lambda: welcome.call_count == 1)
             self.assertEqual(
                 self.post_json("/subscribe", {"email": "reader@example.com"}),
                 200,
@@ -215,12 +225,13 @@ class SubscriberAlertTestCase(unittest.TestCase):
                     "unsubscribe_token"
                 ]
             self.assertEqual(self.post_json(f"/unsubscribe/{token}", {}), 200)
+            self.wait_for(lambda: len(alerts) == 2)
             self.assertEqual(self.post_json(f"/unsubscribe/{token}", {}), 200)
             self.assertEqual(
                 self.post_json("/subscribe", {"email": "reader@example.com"}),
                 200,
             )
-            self.assertEqual(welcome.call_count, 2)
+            self.wait_for(lambda: welcome.call_count == 2)
             self.assertEqual(
                 [call.args[0]["action"] for call in welcome.call_args_list],
                 ["created", "reactivated"],
