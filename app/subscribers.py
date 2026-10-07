@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 
 from app.db import get_connection
 
-
 _LOCAL_PART = (
     r"[a-z0-9!#$%&'*+/=?^_`{|}~-]+"
     r"(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*"
@@ -50,9 +49,7 @@ def _clean_attribution_value(
 
     # Dropping non-printable characters also removes lone surrogates, which
     # json.loads accepts but sqlite3 cannot encode (that would be a 500).
-    printable = "".join(
-        character for character in value if character.isprintable()
-    )
+    printable = "".join(character for character in value if character.isprintable())
     cleaned = printable.strip()[:max_length].strip()
     return cleaned or None
 
@@ -88,11 +85,7 @@ def normalize_email(value) -> str:
         raise ValueError("invalid email")
 
     email = value.strip().lower()
-    if (
-        not email
-        or len(email) > 254
-        or _EMAIL_RE.fullmatch(email) is None
-    ):
+    if not email or len(email) > 254 or _EMAIL_RE.fullmatch(email) is None:
         raise ValueError("invalid email")
 
     return email
@@ -100,9 +93,8 @@ def normalize_email(value) -> str:
 
 def public_base_url() -> str:
     value = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
-    if (
-        not value.startswith(("https://", "http://"))
-        or any(character.isspace() for character in value)
+    if not value.startswith(("https://", "http://")) or any(
+        character.isspace() for character in value
     ):
         raise RuntimeError("PUBLIC_BASE_URL is not configured")
     return value

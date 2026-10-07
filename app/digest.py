@@ -20,7 +20,6 @@ from app.email import (
 )
 from app.log import log_event
 
-
 CONFIG_PATH = Path("config/digest.yaml")
 INTERESTS_PATH = Path("config/interests.yaml")
 
@@ -36,9 +35,7 @@ def load_topic_groups() -> dict:
         features = yaml.safe_load(file)["features"]
 
     return {
-        feature["label"]: feature["group"]
-        for feature in features.values()
-        if feature.get("group")
+        feature["label"]: feature["group"] for feature in features.values() if feature.get("group")
     }
 
 
@@ -68,10 +65,7 @@ def _diversity_score(
     free = diversity.get("free_per_group", {}).get(group, 1)
     repeats = max(0, group_counts.get(group, 0) - free + 1)
 
-    return (
-        article["relevance_score"]
-        - diversity.get("penalty", 0) * repeats
-    )
+    return article["relevance_score"] - diversity.get("penalty", 0) * repeats
 
 
 def get_processing_lookback_hours() -> int:
@@ -102,18 +96,11 @@ def build_digest() -> dict:
     # Diversity only reorders candidates that already passed
     # minimum_score; it never pulls in a weaker article.
     diversity = config.get("diversity") or {}
-    topic_groups = (
-        load_topic_groups()
-        if diversity.get("penalty")
-        else {}
-    )
-    groups = {
-        id(candidate): _primary_group(candidate, topic_groups)
-        for candidate in candidates
-    }
-    group_counts = {}
+    topic_groups = load_topic_groups() if diversity.get("penalty") else {}
+    groups = {id(candidate): _primary_group(candidate, topic_groups) for candidate in candidates}
+    group_counts: dict[str | None, int] = {}
 
-    articles = []
+    articles: list[dict] = []
     skipped_title = 0
     skipped_semantic = 0
     remaining = list(candidates)
@@ -134,10 +121,7 @@ def build_digest() -> dict:
 
         title = " ".join(candidate["title"].split()).casefold()
 
-        if any(
-            title == " ".join(article["title"].split()).casefold()
-            for article in articles
-        ):
+        if any(title == " ".join(article["title"].split()).casefold() for article in articles):
             skipped_title += 1
             continue
 
@@ -158,10 +142,7 @@ def build_digest() -> dict:
         selected=len(articles),
         skipped_title=skipped_title,
         skipped_semantic=skipped_semantic,
-        groups=",".join(
-            f"{group}:{count}"
-            for group, count in sorted(group_counts.items())
-        ),
+        groups=",".join(f"{group}:{count}" for group, count in sorted(group_counts.items())),
     )
 
     return {
@@ -188,20 +169,14 @@ def render_text_digest(
     ]
 
     if not articles:
-        lines.append(
-            "No articles passed the relevance threshold."
-        )
+        lines.append("No articles passed the relevance threshold.")
         if unsubscribe_url:
             lines.append("")
             lines.append(f"Unsubscribe: {unsubscribe_url}")
 
         return "\n".join(lines)
 
-    lines.append(
-        f"{len(articles)} article"
-        + ("s" if len(articles) != 1 else "")
-        + " selected"
-    )
+    lines.append(f"{len(articles)} article" + ("s" if len(articles) != 1 else "") + " selected")
 
     lines.append("")
 
@@ -212,32 +187,21 @@ def render_text_digest(
         title_line = f"{index}. {article['title']}"
 
         if show_score:
-            title_line += (
-                f" [{article['relevance_score']}]"
-            )
+            title_line += f" [{article['relevance_score']}]"
 
         lines.append(title_line)
         lines.append("")
 
-        why_interesting = (
-            article["why_interesting"] or ""
-        ).strip()
+        why_interesting = (article["why_interesting"] or "").strip()
 
         if why_interesting:
-            lines.append(
-                "Why: " + why_interesting
-            )
+            lines.append("Why: " + why_interesting)
             lines.append("")
 
-        lines.append(
-            f"Source: {article['source']}"
-        )
+        lines.append(f"Source: {article['source']}")
 
         if show_topics and article["topics"]:
-            lines.append(
-                "Topics: "
-                + ", ".join(article["topics"])
-            )
+            lines.append("Topics: " + ", ".join(article["topics"]))
 
         lines.append(article["url"])
 
@@ -279,7 +243,8 @@ def render_text_welcome(
         *WELCOME_LINES,
         "",
     ]
-    articles = (edition or {}).get("articles") or []
+    edition = edition or {}
+    articles = edition.get("articles") or []
 
     if not articles:
         lines.append(WELCOME_FIRST)
@@ -361,10 +326,7 @@ def main(argv: list[str] | None = None) -> None:
     show_score = config.get("show_score", True)
     show_topics = config.get("show_topics", True)
 
-    if args.sample:
-        digest = sample_digest()
-    else:
-        digest = build_digest()
+    digest = sample_digest() if args.sample else build_digest()
 
     output = render_text_digest(
         digest=digest,
@@ -388,9 +350,7 @@ def main(argv: list[str] | None = None) -> None:
         show_score=show_score,
         show_topics=show_topics,
         sent_at=datetime.now().astimezone(),
-        unsubscribe_url=(
-            "https://digest.joaoac.com/unsubscribe/preview"
-        ),
+        unsubscribe_url=("https://digest.joaoac.com/unsubscribe/preview"),
     )
     path = Path(args.html)
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -29,7 +29,6 @@ from app.subscribers import (
 )
 from app.welcome import queue_welcome_email
 
-
 MAX_BODY_BYTES = 8192
 EDITIONS_PAGE_SIZE = 20
 # Bounds the SQLite OFFSET; far beyond any realistic archive (20 editions/page).
@@ -56,8 +55,8 @@ class RateLimiter:
         self.limit = limit
         self.window_seconds = window_seconds
         self.global_limit = global_limit
-        self._hits = {}
-        self._global = []
+        self._hits: dict[str, list[float]] = {}
+        self._global: list[float] = []
         self._lock = threading.Lock()
 
     def reset(self) -> None:
@@ -70,20 +69,9 @@ class RateLimiter:
         window = self.window_seconds
 
         with self._lock:
-            self._global = [
-                stamp
-                for stamp in self._global
-                if now - stamp < window
-            ]
-            hits = [
-                stamp
-                for stamp in self._hits.get(key, [])
-                if now - stamp < window
-            ]
-            if (
-                len(hits) >= self.limit
-                or len(self._global) >= self.global_limit
-            ):
+            self._global = [stamp for stamp in self._global if now - stamp < window]
+            hits = [stamp for stamp in self._hits.get(key, []) if now - stamp < window]
+            if len(hits) >= self.limit or len(self._global) >= self.global_limit:
                 self._hits[key] = hits
                 return False
 
@@ -92,9 +80,7 @@ class RateLimiter:
             self._hits[key] = hits
             if len(self._hits) > 5000:
                 self._hits = {
-                    item_key: item_hits
-                    for item_key, item_hits in self._hits.items()
-                    if item_hits
+                    item_key: item_hits for item_key, item_hits in self._hits.items() if item_hits
                 }
             return True
 
@@ -106,11 +92,7 @@ def allowed_origins() -> set[str]:
     raw = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
     if not raw:
         return set(_DEFAULT_ORIGINS)
-    return {
-        item.strip()
-        for item in raw.split(",")
-        if item.strip()
-    }
+    return {item.strip() for item in raw.split(",") if item.strip()}
 
 
 def listen_port() -> int:
@@ -139,9 +121,7 @@ def _database_ok() -> bool:
     except Exception as error:
         log_event(
             "health_error",
-            error=redact_text(
-                f"{type(error).__name__}: {error}"
-            ),
+            error=redact_text(f"{type(error).__name__}: {error}"),
         )
         return False
 
@@ -201,9 +181,7 @@ class DigestHandler(BaseHTTPRequestHandler):
         except Exception as error:
             log_event(
                 "http_error",
-                error=redact_text(
-                    f"{type(error).__name__}: {error}"
-                ),
+                error=redact_text(f"{type(error).__name__}: {error}"),
             )
             if not self._responded:
                 self._reply(500, {"ok": False})
@@ -372,9 +350,7 @@ class DigestHandler(BaseHTTPRequestHandler):
             notify_subscriber("unsubscribed", result["email"])
 
     def _start_job(self, job: str) -> None:
-        authorization = _job_authorization(
-            self.headers.get("Authorization", "")
-        )
+        authorization = _job_authorization(self.headers.get("Authorization", ""))
         if authorization == "disabled":
             self._reply(404, {"ok": False})
             return
@@ -412,9 +388,7 @@ class DigestHandler(BaseHTTPRequestHandler):
             return None, 400
 
         try:
-            payload = json.loads(
-                self.rfile.read(length).decode("utf-8")
-            )
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             return None, 400
 
@@ -431,15 +405,10 @@ class DigestHandler(BaseHTTPRequestHandler):
 
     def _client_ip(self) -> str:
         forwarded = self.headers.get("X-Forwarded-For", "")
-        parts = [
-            part.strip()
-            for part in forwarded.split(",")
-            if part.strip()
-        ]
+        parts = [part.strip() for part in forwarded.split(",") if part.strip()]
         if parts:
             return parts[-1][:128]
-        host = self.client_address[0] if self.client_address else ""
-        return host
+        return self.client_address[0] if self.client_address else ""
 
     def _write_cors(self) -> None:
         self.send_header("Vary", "Origin")

@@ -10,9 +10,7 @@ from app.publication import revalidate_published_edition
 class PublicationTestCase(unittest.TestCase):
     @patch("app.publication.httpx.post")
     @patch("app.publication.list_public_editions")
-    def test_revalidates_new_and_previous_editions(
-        self, editions: Mock, post: Mock
-    ) -> None:
+    def test_revalidates_new_and_previous_editions(self, editions: Mock, post: Mock) -> None:
         editions.return_value = [
             {"date": "2026-10-05", "article_count": 8},
             {"date": "2026-10-04", "article_count": 8},
@@ -37,9 +35,7 @@ class PublicationTestCase(unittest.TestCase):
 
     @patch("app.publication.httpx.post")
     @patch("app.publication.list_public_editions")
-    def test_failure_is_retried_without_failing_delivery(
-        self, editions: Mock, post: Mock
-    ) -> None:
+    def test_failure_is_retried_without_failing_delivery(self, editions: Mock, post: Mock) -> None:
         editions.return_value = [{"date": "2026-10-05", "article_count": 8}]
         post.side_effect = httpx.ConnectError("unavailable")
 

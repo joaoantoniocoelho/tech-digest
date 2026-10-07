@@ -7,12 +7,9 @@ import httpx
 from app.db import _parse_article_datetime
 from app.share import edition_date, share_links
 
-
 RESEND_API_URL = "https://api.resend.com/emails"
 RESEND_TIMEOUT_SECONDS = 15.0
-DEFAULT_FROM = (
-    "João Coelho Tech Digest <digest@digest.joaoac.com>"
-)
+DEFAULT_FROM = "João Coelho Tech Digest <digest@digest.joaoac.com>"
 
 FONT_SANS = "'Helvetica Neue', Helvetica, Arial, sans-serif"
 
@@ -71,9 +68,7 @@ def _get_api_key() -> str:
     ).strip()
 
     if not api_key:
-        raise RuntimeError(
-            "RESEND_API_KEY is not configured"
-        )
+        raise RuntimeError("RESEND_API_KEY is not configured")
 
     return api_key
 
@@ -81,16 +76,10 @@ def _get_api_key() -> str:
 def _get_recipients() -> list[str]:
     raw = os.getenv("RESEND_TO", "")
 
-    recipients = [
-        item.strip()
-        for item in raw.split(",")
-        if item.strip()
-    ]
+    recipients = [item.strip() for item in raw.split(",") if item.strip()]
 
     if not recipients:
-        raise RuntimeError(
-            "RESEND_TO is not configured"
-        )
+        raise RuntimeError("RESEND_TO is not configured")
 
     return recipients
 
@@ -109,21 +98,14 @@ def _esc(value: str) -> str:
 
 
 def _sans(weight: int = 400) -> str:
-    return (
-        f"font-family:{FONT_SANS};"
-        f"font-weight:{weight};"
-    )
+    return f"font-family:{FONT_SANS};font-weight:{weight};"
 
 
 def _format_calendar_date(
     value: datetime,
     with_weekday: bool = False,
 ) -> str:
-    label = (
-        f"{_MONTHS_SHORT[value.month - 1]} "
-        f"{value.day}, "
-        f"{value.year}"
-    )
+    label = f"{_MONTHS_SHORT[value.month - 1]} {value.day}, {value.year}"
 
     if not with_weekday:
         return label
@@ -135,11 +117,7 @@ def _format_edition_date(
     value: datetime,
 ) -> tuple[str, str]:
     weekday = _WEEKDAYS[value.weekday()]
-    long_date = (
-        f"{_MONTHS[value.month - 1]} "
-        f"{value.day}, "
-        f"{value.year}"
-    )
+    long_date = f"{_MONTHS[value.month - 1]} {value.day}, {value.year}"
     return weekday, long_date
 
 
@@ -153,23 +131,15 @@ def _format_article_date(
 
     local = parsed.astimezone()
 
-    return (
-        f"{_MONTHS_SHORT[local.month - 1]} {local.day}"
-    )
+    return f"{_MONTHS_SHORT[local.month - 1]} {local.day}"
 
 
 def digest_subject(
     sent_at: datetime | None = None,
 ) -> str:
-    sent_at = (
-        sent_at
-        or datetime.now().astimezone()
-    )
+    sent_at = sent_at or datetime.now().astimezone()
 
-    return (
-        "João Coelho Tech Digest — "
-        + _format_calendar_date(sent_at)
-    )
+    return "João Coelho Tech Digest — " + _format_calendar_date(sent_at)
 
 
 def _article_href(url: str) -> str:
@@ -199,11 +169,7 @@ def _story_bits(
     credit = [part for part in (source, published) if part]
 
     if show_topics:
-        credit.extend(
-            _clean(topic)
-            for topic in article.get("topics") or []
-            if _clean(topic)
-        )
+        credit.extend(_clean(topic) for topic in article.get("topics") or [] if _clean(topic))
 
     if show_score and article.get("relevance_score") is not None:
         credit.append(f"Score {article['relevance_score']}")
@@ -226,9 +192,9 @@ def _title_html(title: str, href: str, mark_size: int) -> str:
     return (
         f'<a href="{_esc(href)}" class="ink" '
         f'style="color:{INK};text-decoration:none;">'
-        f"{label}<span class=\"accent\" style=\"{_sans()}"
+        f'{label}<span class="accent" style="{_sans()}'
         f"color:{ACCENT};font-size:{mark_size}px;"
-        f"line-height:1;margin-left:6px;\">&gt;</span></a>"
+        f'line-height:1;margin-left:6px;">&gt;</span></a>'
     )
 
 
@@ -292,37 +258,27 @@ SHARE_LINK_LABEL = "Link to this edition"
 def digest_share_links(sent_at: datetime) -> dict[str, str]:
     date = edition_date(sent_at)
     _, long_date = _format_edition_date(datetime.fromisoformat(date))
-    text = (
-        f"Tech Digest, {long_date}: a short list of software "
-        "engineering articles worth reading."
-    )
+    text = f"Tech Digest, {long_date}: a short list of software engineering articles worth reading."
     return share_links(date, text)
 
 
 def _render_share(links: dict[str, str]) -> str:
     link = (
-        f'{_sans()}font-size:13px;line-height:20px;'
+        f"{_sans()}font-size:13px;line-height:20px;"
         f"color:{ACCENT};text-decoration:underline;"
         "text-underline-offset:2px;"
     )
     parts = [
-        (
-            f'<a href="{_esc(links["link"])}" class="accent" style="{link}">'
-            f"{SHARE_LINK_LABEL}</a>"
-        ),
+        (f'<a href="{_esc(links["link"])}" class="accent" style="{link}">{SHARE_LINK_LABEL}</a>'),
         f'<a href="{_esc(links["x"])}" class="accent" style="{link}">X</a>',
-        (
-            f'<a href="{_esc(links["linkedin"])}" class="accent" style="{link}">'
-            "LinkedIn</a>"
-        ),
+        (f'<a href="{_esc(links["linkedin"])}" class="accent" style="{link}">LinkedIn</a>'),
     ]
     separated = (
-        f'<span class="faint" style="color:{FAINT};">'
-        "&nbsp;&nbsp;·&nbsp;&nbsp;</span>"
+        f'<span class="faint" style="color:{FAINT};">&nbsp;&nbsp;·&nbsp;&nbsp;</span>'
     ).join(parts)
 
     return (
-        "<tr><td style=\"padding-top:40px;\">"
+        '<tr><td style="padding-top:40px;">'
         f'<p class="ink" style="margin:0;{_sans(500)}font-size:15px;'
         f'line-height:22px;color:{INK};">{SHARE_TITLE}</p>'
         f'<p class="copy" style="margin:4px 0 0;{_sans()}font-size:14px;'
@@ -334,7 +290,7 @@ def _render_share(links: dict[str, str]) -> str:
 
 def _render_footer(unsubscribe_url: str | None) -> str:
     link = (
-        f'{_sans()}font-size:12px;line-height:18px;'
+        f"{_sans()}font-size:12px;line-height:18px;"
         f"color:{ACCENT};text-decoration:underline;"
         "text-underline-offset:2px;"
     )
@@ -344,17 +300,15 @@ def _render_footer(unsubscribe_url: str | None) -> str:
     ]
     if unsubscribe_url:
         parts.append(
-            f'<a href="{_esc(unsubscribe_url)}" class="accent" style="{link}">'
-            "Unsubscribe</a>"
+            f'<a href="{_esc(unsubscribe_url)}" class="accent" style="{link}">Unsubscribe</a>'
         )
 
     separated = (
-        f'<span class="faint" style="color:{FAINT};">'
-        "&nbsp;&nbsp;·&nbsp;&nbsp;</span>"
+        f'<span class="faint" style="color:{FAINT};">&nbsp;&nbsp;·&nbsp;&nbsp;</span>'
     ).join(parts)
 
     return (
-        "<tr><td style=\"padding-top:44px;\">"
+        '<tr><td style="padding-top:44px;">'
         '<p class="muted" style="margin:0;'
         f'{_sans()}font-size:12px;line-height:18px;color:{MUTED};">'
         "Curated by João Coelho</p>"
@@ -381,7 +335,7 @@ def _render_stories(
 
 def _render_paragraph(text: str, top: str = "28px") -> str:
     return (
-        f"<tr><td style=\"padding-top:{top};\">"
+        f'<tr><td style="padding-top:{top};">'
         '<p class="copy" style="margin:0;'
         f'{_sans()}font-size:15px;line-height:22px;color:{COPY};">'
         f"{_esc(text)}</p>"
@@ -395,6 +349,7 @@ def _render_document(
     intro: str,
     rows: str,
 ) -> str:
+    # Trailing backslashes only wrap long source lines; the rendered HTML is unchanged.
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -425,19 +380,30 @@ body, table, td, p, h2, a {{ -webkit-text-size-adjust:100%; }}
 <title>João Coelho Tech Digest</title>
 </head>
 <body class="canvas" bgcolor="{CANVAS}" style="margin:0;padding:0;background-color:{CANVAS};">
-<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">{_esc(preheader)}&#847;&zwnj;&nbsp;</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="canvas" bgcolor="{CANVAS}" style="background-color:{CANVAS};">
-<tr><td align="center" class="canvas canvas-pad" bgcolor="{CANVAS}" style="padding:24px 16px;background-color:{CANVAS};">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="paper" bgcolor="{PAPER}" style="width:100%;max-width:600px;background-color:{PAPER};">
-<tr><td class="paper sheet" bgcolor="{PAPER}" style="padding:36px 48px 40px;background-color:{PAPER};">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">\
+{_esc(preheader)}&#847;&zwnj;&nbsp;</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="canvas" \
+bgcolor="{CANVAS}" style="background-color:{CANVAS};">
+<tr><td align="center" class="canvas canvas-pad" bgcolor="{CANVAS}" \
+style="padding:24px 16px;background-color:{CANVAS};">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="paper" \
+bgcolor="{PAPER}" style="width:100%;max-width:600px;background-color:{PAPER};">
+<tr><td class="paper sheet" bgcolor="{PAPER}" \
+style="padding:36px 48px 40px;background-color:{PAPER};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
-<td class="muted" style="{_sans()}font-size:11px;line-height:16px;letter-spacing:0.18em;color:{MUTED};">TECH DIGEST</td>
-<td class="accent" align="right" style="{_sans()}font-size:11px;line-height:16px;letter-spacing:0.14em;color:{ACCENT};">{_esc(stamp)}</td>
+<td class="muted" \
+style="{_sans()}font-size:11px;line-height:16px;letter-spacing:0.18em;color:{MUTED};">TECH DIGEST\
+</td>
+<td class="accent" align="right" \
+style="{_sans()}font-size:11px;line-height:16px;letter-spacing:0.14em;color:{ACCENT};">\
+{_esc(stamp)}</td>
 </tr>
 </table>
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;">
-<tr><td class="mark" width="28" height="2" bgcolor="{ACCENT_MARK}" style="width:28px;height:2px;background-color:{ACCENT_MARK};font-size:0;line-height:2px;">&nbsp;</td></tr>
+<tr><td class="mark" width="28" height="2" bgcolor="{ACCENT_MARK}" \
+style="width:28px;height:2px;background-color:{ACCENT_MARK};font-size:0;line-height:2px;">&nbsp;\
+</td></tr>
 </table>
 {intro}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -472,10 +438,7 @@ def _render_edition_meta(
 
 def _edition_label(count: int, lookback_hours: int) -> str:
     noun = "story" if count == 1 else "stories"
-    return (
-        f"{count} selected {noun} from the last "
-        f"{lookback_hours} hours"
-    )
+    return f"{count} selected {noun} from the last {lookback_hours} hours"
 
 
 def render_html_digest(
@@ -499,9 +462,7 @@ def render_html_digest(
             + _render_share(digest_share_links(sent_at))
         )
     else:
-        story_rows = _render_paragraph(
-            "No articles passed the relevance threshold."
-        )
+        story_rows = _render_paragraph("No articles passed the relevance threshold.")
 
     intro = (
         f'<p class="ink" style="margin:20px 0 0;{_sans()}font-size:16px;'
@@ -591,9 +552,7 @@ def send_email(
     response = httpx.post(
         RESEND_API_URL,
         headers={
-            "Authorization": (
-                f"Bearer {_get_api_key()}"
-            ),
+            "Authorization": (f"Bearer {_get_api_key()}"),
             "Content-Type": "application/json",
         },
         json={
@@ -609,17 +568,11 @@ def send_email(
     if not response.is_success:
         detail = response.text.strip()
 
-        raise RuntimeError(
-            "Resend API error "
-            f"({response.status_code}): "
-            f"{detail}"
-        )
+        raise RuntimeError(f"Resend API error ({response.status_code}): {detail}")
 
     payload = response.json()
 
     if "id" not in payload:
-        raise RuntimeError(
-            f"Resend API error: {payload}"
-        )
+        raise RuntimeError(f"Resend API error: {payload}")
 
     return payload
