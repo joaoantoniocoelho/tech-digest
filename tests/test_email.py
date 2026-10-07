@@ -18,7 +18,6 @@ from app.email import (
 )
 from app.send_digest import send_daily_digest
 
-
 SENT_AT = datetime(
     2026,
     9,
@@ -37,15 +36,11 @@ def _digest():
                 "id": 7,
                 "title": "Tom & Jerry <script>",
                 "relevance_score": 87,
-                "why_interesting": (
-                    "AI agents · Developer tools"
-                ),
+                "why_interesting": ("AI agents · Developer tools"),
                 "source": "Example Feed",
                 "topics": ["Compiler design"],
                 "url": "https://example.com/a?b=1&c=2",
-                "published_at": (
-                    "2026-09-22T15:00:00+00:00"
-                ),
+                "published_at": ("2026-09-22T15:00:00+00:00"),
             }
         ],
     }
@@ -223,7 +218,7 @@ class ShareDigestTestCase(unittest.TestCase):
         )
         self.assertIn(
             'href="https://www.linkedin.com/sharing/share-offsite/?url='
-            'https%3A%2F%2Fdigest.joaoac.com%2Fdigest%2F2026-09-22'
+            "https%3A%2F%2Fdigest.joaoac.com%2Fdigest%2F2026-09-22"
             '%3Fref%3Dlinkedin"',
             html,
         )
@@ -276,18 +271,13 @@ class SendEmailTestCase(unittest.TestCase):
     def test_posts_html_and_text_to_resend(self):
         response = MagicMock()
         response.is_success = True
-        response.json.return_value = {
-            "id": "email_123"
-        }
+        response.json.return_value = {"id": "email_123"}
 
         with patch.dict(
             os.environ,
             {
                 "RESEND_API_KEY": "re_test",
-                "RESEND_TO": (
-                    "reader@example.com, "
-                    "other@example.com"
-                ),
+                "RESEND_TO": ("reader@example.com, other@example.com"),
             },
             clear=False,
         ):
@@ -336,40 +326,44 @@ class SendEmailTestCase(unittest.TestCase):
         )
 
     def test_missing_key_and_recipient(self):
-        with patch.dict(
-            os.environ,
-            {
-                "RESEND_API_KEY": "",
-                "RESEND_TO": "reader@example.com",
-            },
-            clear=False,
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "RESEND_API_KEY": "",
+                    "RESEND_TO": "reader@example.com",
+                },
+                clear=False,
+            ),
+            self.assertRaises(RuntimeError) as missing_key,
         ):
-            with self.assertRaises(RuntimeError) as missing_key:
-                send_email(
-                    subject="S",
-                    html_body="<p>Hi</p>",
-                    text="Hi",
-                )
+            send_email(
+                subject="S",
+                html_body="<p>Hi</p>",
+                text="Hi",
+            )
 
         self.assertEqual(
             str(missing_key.exception),
             "RESEND_API_KEY is not configured",
         )
 
-        with patch.dict(
-            os.environ,
-            {
-                "RESEND_API_KEY": "re_test",
-                "RESEND_TO": "  ",
-            },
-            clear=False,
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "RESEND_API_KEY": "re_test",
+                    "RESEND_TO": "  ",
+                },
+                clear=False,
+            ),
+            self.assertRaises(RuntimeError) as missing_to,
         ):
-            with self.assertRaises(RuntimeError) as missing_to:
-                send_email(
-                    subject="S",
-                    html_body="<p>Hi</p>",
-                    text="Hi",
-                )
+            send_email(
+                subject="S",
+                html_body="<p>Hi</p>",
+                text="Hi",
+            )
 
         self.assertEqual(
             str(missing_to.exception),
@@ -382,24 +376,26 @@ class SendEmailTestCase(unittest.TestCase):
         response.status_code = 422
         response.text = "Invalid `from` field"
 
-        with patch.dict(
-            os.environ,
-            {
-                "RESEND_API_KEY": "re_test",
-                "RESEND_TO": "reader@example.com",
-            },
-            clear=False,
-        ):
-            with patch(
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "RESEND_API_KEY": "re_test",
+                    "RESEND_TO": "reader@example.com",
+                },
+                clear=False,
+            ),
+            patch(
                 "app.email.httpx.post",
                 return_value=response,
-            ):
-                with self.assertRaises(RuntimeError) as error:
-                    send_email(
-                        subject="S",
-                        html_body="<p>Hi</p>",
-                        text="Hi",
-                    )
+            ),
+            self.assertRaises(RuntimeError) as error,
+        ):
+            send_email(
+                subject="S",
+                html_body="<p>Hi</p>",
+                text="Hi",
+            )
 
         self.assertIn("422", str(error.exception))
         self.assertIn(
@@ -454,9 +450,7 @@ class SendDailyDigestTestCase(unittest.TestCase):
                 "token-reader-1",
             )
         ]
-        send_email_mock.return_value = {
-            "id": "email_1"
-        }
+        send_email_mock.return_value = {"id": "email_1"}
 
         with patch.dict(
             os.environ,
@@ -467,11 +461,7 @@ class SendDailyDigestTestCase(unittest.TestCase):
         send_email_mock.assert_called_once()
         kwargs = send_email_mock.call_args.kwargs
         self.assertEqual(kwargs["to"], ["reader@example.com"])
-        self.assertTrue(
-            kwargs["subject"].startswith(
-                "João Coelho Tech Digest — "
-            )
-        )
+        self.assertTrue(kwargs["subject"].startswith("João Coelho Tech Digest — "))
         self.assertIn("Example", kwargs["html_body"])
         self.assertIn("João Coelho", kwargs["html_body"])
         self.assertIn(
@@ -522,19 +512,20 @@ class SendDailyDigestTestCase(unittest.TestCase):
         published_before_send = []
 
         def send(**kwargs):
-            published_before_send.append(
-                (mark.call_count, revalidate.call_count)
-            )
+            published_before_send.append((mark.call_count, revalidate.call_count))
             if kwargs["to"] == ["one@example.com"]:
                 raise RuntimeError("Resend API error (422): bad")
             return {"id": "email"}
 
         send_email_mock.side_effect = send
 
-        with patch.dict(
-            os.environ,
-            {"PUBLIC_BASE_URL": "https://api.digest.joaoac.com"},
-        ), redirect_stdout(StringIO()):
+        with (
+            patch.dict(
+                os.environ,
+                {"PUBLIC_BASE_URL": "https://api.digest.joaoac.com"},
+            ),
+            redirect_stdout(StringIO()),
+        ):
             send_daily_digest()
 
         self.assertEqual(published_before_send, [(0, 0), (0, 0), (1, 1)])
@@ -553,19 +544,17 @@ class SendDailyDigestTestCase(unittest.TestCase):
         mark,
     ):
         build_digest.return_value = self._digest()
-        subscribers.return_value = [
-            self._subscriber("reader@example.com", "token-reader-1")
-        ]
-        send_email_mock.side_effect = RuntimeError(
-            "Resend API error (401): invalid"
-        )
+        subscribers.return_value = [self._subscriber("reader@example.com", "token-reader-1")]
+        send_email_mock.side_effect = RuntimeError("Resend API error (401): invalid")
 
-        with patch.dict(
-            os.environ,
-            {"PUBLIC_BASE_URL": "https://api.digest.joaoac.com"},
+        with (
+            patch.dict(
+                os.environ,
+                {"PUBLIC_BASE_URL": "https://api.digest.joaoac.com"},
+            ),
+            self.assertRaises(RuntimeError),
         ):
-            with self.assertRaises(RuntimeError):
-                send_daily_digest()
+            send_daily_digest()
 
         mark.assert_not_called()
 
@@ -590,12 +579,14 @@ class SendDailyDigestTestCase(unittest.TestCase):
             {"id": "email_2"},
         ]
 
-        with patch.dict(
-            os.environ,
-            {"PUBLIC_BASE_URL": "https://api.digest.joaoac.com"},
+        with (
+            patch.dict(
+                os.environ,
+                {"PUBLIC_BASE_URL": "https://api.digest.joaoac.com"},
+            ),
+            redirect_stdout(StringIO()) as output,
         ):
-            with redirect_stdout(StringIO()) as output:
-                send_daily_digest()
+            send_daily_digest()
 
         self.assertEqual(send_email_mock.call_count, 2)
         first = send_email_mock.call_args_list[0].kwargs
@@ -633,12 +624,14 @@ class SendDailyDigestTestCase(unittest.TestCase):
         ]
         send_email_mock.side_effect = RuntimeError("Resend down")
 
-        with patch.dict(
-            os.environ,
-            {"PUBLIC_BASE_URL": "https://api.digest.joaoac.com"},
+        with (
+            patch.dict(
+                os.environ,
+                {"PUBLIC_BASE_URL": "https://api.digest.joaoac.com"},
+            ),
+            self.assertRaises(RuntimeError),
         ):
-            with self.assertRaises(RuntimeError):
-                send_daily_digest()
+            send_daily_digest()
 
         self.assertEqual(send_email_mock.call_count, 2)
         mark.assert_not_called()
@@ -691,8 +684,4 @@ class SendDailyDigestTestCase(unittest.TestCase):
         self.assertIn("# send_message(", source)
 
         for line in source.splitlines():
-            self.assertFalse(
-                line.strip().startswith(
-                    "send_message("
-                )
-            )
+            self.assertFalse(line.strip().startswith("send_message("))

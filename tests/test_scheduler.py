@@ -59,9 +59,8 @@ class ScheduleTestCase(unittest.TestCase):
 
 class PipelineLockTestCase(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        temporary.close()
-        self.db_path = Path(temporary.name)
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temporary:
+            self.db_path = Path(temporary.name)
         self.db_patcher = patch.object(db, "DB_PATH", self.db_path)
         self.db_patcher.start()
         db.init_db()
@@ -104,6 +103,7 @@ class PipelineLockTestCase(unittest.TestCase):
                 if _name == "process":
                     raise RuntimeError("classifier down")
                 return {"new_articles": 3}
+
             return run
 
         with patch("app.pipeline.get_job", side_effect=fake_job):
@@ -124,9 +124,8 @@ class PipelineLockTestCase(unittest.TestCase):
 
 class SchedulerLoopTestCase(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        temporary.close()
-        self.db_path = Path(temporary.name)
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temporary:
+            self.db_path = Path(temporary.name)
         self.db_patcher = patch.object(db, "DB_PATH", self.db_path)
         self.db_patcher.start()
         db.init_db()
@@ -163,12 +162,14 @@ class SchedulerLoopTestCase(unittest.TestCase):
         def fake_run(_job):
             return next(outcomes)
 
-        with patch("app.scheduler.run_job_blocking", side_effect=fake_run):
-            with patch("app.scheduler.due_slots", return_value=[(_at(7, 0), "send")]):
-                scheduler._tick(_at(7, 0))
-                self.assertIsNone(slot_status(slot_key("send", _at(7, 0))))
-                scheduler._tick(_at(7, 0))
-                self.assertEqual(slot_status(slot_key("send", _at(7, 0))), "error")
+        with (
+            patch("app.scheduler.run_job_blocking", side_effect=fake_run),
+            patch("app.scheduler.due_slots", return_value=[(_at(7, 0), "send")]),
+        ):
+            scheduler._tick(_at(7, 0))
+            self.assertIsNone(slot_status(slot_key("send", _at(7, 0))))
+            scheduler._tick(_at(7, 0))
+            self.assertEqual(slot_status(slot_key("send", _at(7, 0))), "error")
 
         calls = {"n": 0}
 

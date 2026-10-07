@@ -12,9 +12,8 @@ from app import db
 
 class MarkArticlesDeliveredTestCase(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        temporary.close()
-        self.db_path = Path(temporary.name)
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temporary:
+            self.db_path = Path(temporary.name)
         self.db_patcher = patch.object(db, "DB_PATH", self.db_path)
         self.db_patcher.start()
         db.init_db()
@@ -51,7 +50,12 @@ class MarkArticlesDeliveredTestCase(unittest.TestCase):
         db.mark_articles_delivered(
             article_ids=[article_id],
             delivered_at=datetime(
-                2026, 9, 22, 22, 30, 15,
+                2026,
+                9,
+                22,
+                22,
+                30,
+                15,
                 tzinfo=timezone(timedelta(hours=-3)),
             ),
         )

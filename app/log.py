@@ -2,13 +2,8 @@ import os
 import re
 import threading
 
-
-_EMAIL_RE = re.compile(
-    r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"
-)
-_UNSUBSCRIBE_RE = re.compile(
-    r"/unsubscribe/[A-Za-z0-9_\-]{10,}"
-)
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+_UNSUBSCRIBE_RE = re.compile(r"/unsubscribe/[A-Za-z0-9_\-]{10,}")
 _SECRET_ENV_NAMES = (
     "TYPESAFE_API_KEY",
     "RESEND_API_KEY",
@@ -28,11 +23,10 @@ def redact_text(value: str) -> str:
             text = text.replace(secret, "[redacted]")
 
     text = _EMAIL_RE.sub("[redacted-email]", text)
-    text = _UNSUBSCRIBE_RE.sub(
+    return _UNSUBSCRIBE_RE.sub(
         "/unsubscribe/[redacted]",
         text,
     )
-    return text
 
 
 def redact_email(email: str) -> str:

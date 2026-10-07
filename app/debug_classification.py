@@ -26,42 +26,28 @@ def _load_profile() -> dict:
 
 
 def _article_content(article: dict) -> str:
-    content = fetch_article_content(
-        article["url"]
-    )
+    content = fetch_article_content(article["url"])
 
     if content:
-        return _prepare_classification_content(
-            content
-        )
+        return _prepare_classification_content(content)
 
     excerpt = (article.get("feed_excerpt") or "").strip()
 
     if len(excerpt) >= MIN_FEED_EXCERPT_LENGTH:
-        print(
-            "Article extraction failed; "
-            f"using RSS excerpt ({len(excerpt)} characters)"
-        )
+        print(f"Article extraction failed; using RSS excerpt ({len(excerpt)} characters)")
         return excerpt
 
-    raise ValueError(
-        "Could not extract article content "
-        "and no usable RSS excerpt was available"
-    )
+    raise ValueError("Could not extract article content and no usable RSS excerpt was available")
 
 
 def _resolve_article(args) -> dict:
     init_db()
 
     if args.article_id is not None:
-        article = get_article_by_id(
-            args.article_id
-        )
+        article = get_article_by_id(args.article_id)
 
         if article is None:
-            raise ValueError(
-                f"No article with id {args.article_id}"
-            )
+            raise ValueError(f"No article with id {args.article_id}")
 
         return article
 
@@ -80,11 +66,14 @@ def _resolve_article(args) -> dict:
 
 
 def _probability_lines(answer) -> list[str]:
-    probabilities = getattr(
-        answer,
-        "probabilities",
-        None,
-    ) or {}
+    probabilities = (
+        getattr(
+            answer,
+            "probabilities",
+            None,
+        )
+        or {}
+    )
 
     lines = ["  probabilities:"]
 
@@ -108,9 +97,7 @@ def _probability_lines(answer) -> list[str]:
         return lines
 
     for key, value in items:
-        lines.append(
-            f"    {key}: {value:.2f}"
-        )
+        lines.append(f"    {key}: {value:.2f}")
 
     return lines
 
@@ -136,9 +123,7 @@ def _format_feature_block(
     lines.extend(_probability_lines(answer))
 
     if isinstance(confidence, (int, float)):
-        lines.append(
-            f"  confidence: {confidence:.2f}"
-        )
+        lines.append(f"  confidence: {confidence:.2f}")
 
     lines.append(f"  discrete: {discrete}")
 
@@ -164,9 +149,7 @@ def _print_debug(
                 feature_id=feature_id,
                 label=feature["label"],
                 answer=answers[feature_id],
-                discrete=result[
-                    "feature_strengths"
-                ][feature_id],
+                discrete=result["feature_strengths"][feature_id],
             )
         )
         print()
@@ -174,16 +157,8 @@ def _print_debug(
     importance_answer = answers[IMPORTANCE_ID]
 
     print("Importance:")
-    print(
-        f"  raw score: {importance_answer.score:.2f}"
-    )
-    print(
-        "\n".join(
-            _probability_lines(
-                importance_answer
-            )
-        )
-    )
+    print(f"  raw score: {importance_answer.score:.2f}")
+    print("\n".join(_probability_lines(importance_answer)))
 
     confidence = getattr(
         importance_answer,
@@ -192,18 +167,11 @@ def _print_debug(
     )
 
     if isinstance(confidence, (int, float)):
-        print(
-            f"  confidence: {confidence:.2f}"
-        )
+        print(f"  confidence: {confidence:.2f}")
 
-    print(
-        f"  discrete: {result['importance']}"
-    )
+    print(f"  discrete: {result['importance']}")
     print()
-    print(
-        "Final relevance score: "
-        f"{result['relevance_score']}"
-    )
+    print(f"Final relevance score: {result['relevance_score']}")
 
     why = result["why_interesting"]
 
@@ -215,14 +183,9 @@ def _print_debug(
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        description=(
-            "Classify one article with Jev without "
-            "saving the result."
-        )
+        description=("Classify one article with Jev without saving the result.")
     )
-    source = parser.add_mutually_exclusive_group(
-        required=True
-    )
+    source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--url")
     source.add_argument(
         "--article-id",
@@ -236,9 +199,7 @@ def main(argv=None) -> int:
         profile = _load_profile()
         content = _article_content(article)
 
-        print(
-            f"Extracted: {len(content)} characters"
-        )
+        print(f"Extracted: {len(content)} characters")
 
         result = evaluate_article(
             title=article["title"],
@@ -247,8 +208,7 @@ def main(argv=None) -> int:
         )
     except Exception as error:
         print(
-            "Debug classification failed: "
-            + _sanitize_error(error),
+            "Debug classification failed: " + _sanitize_error(error),
             file=sys.stderr,
         )
         return 1

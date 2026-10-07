@@ -535,6 +535,13 @@ Run the full test suite with:
 python -m unittest discover -s tests -v
 ```
 
+Run the full verification (format, lint, typecheck, tests) used by CI with:
+
+```bash
+python -m pip install -r requirements.txt -r requirements-dev.txt
+scripts/check
+```
+
 Check whitespace errors with:
 
 ```bash

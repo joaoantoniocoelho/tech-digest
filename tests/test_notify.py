@@ -2,6 +2,7 @@ import json
 import runpy
 import tempfile
 import threading
+import time
 import unittest
 from http.client import HTTPConnection
 from pathlib import Path
@@ -24,9 +25,11 @@ from app.subscribers import subscribe_email, unsubscribe_with_token
 
 class NotifyMessageTestCase(unittest.TestCase):
     def test_missing_config_does_not_call_telegram(self):
-        with patch.dict("os.environ", {}, clear=True):
-            with patch("app.notify.send_message") as send_message:
-                notify("Busca de notícias começou")
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("app.notify.send_message") as send_message,
+        ):
+            notify("Busca de notícias começou")
         send_message.assert_not_called()
 
     def test_configured_send_is_best_effort(self):
@@ -34,12 +37,14 @@ class NotifyMessageTestCase(unittest.TestCase):
             "TELEGRAM_BOT_TOKEN": "123:secret",
             "TELEGRAM_CHAT_ID": "99",
         }
-        with patch.dict("os.environ", env, clear=False):
-            with patch(
+        with (
+            patch.dict("os.environ", env, clear=False),
+            patch(
                 "app.notify.send_message",
                 side_effect=RuntimeError("telegram down"),
-            ):
-                notify("Classificação começou")
+            ),
+        ):
+            notify("Classificação começou")
 
     def test_job_and_subscriber_messages(self):
         sent = []
@@ -101,9 +106,8 @@ class NotifyMessageTestCase(unittest.TestCase):
 
 class JobAlertTestCase(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        temporary.close()
-        self.db_path = Path(temporary.name)
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temporary:
+            self.db_path = Path(temporary.name)
         self.db_patcher = patch.object(db, "DB_PATH", self.db_path)
         self.db_patcher.start()
         db.init_db()
@@ -122,43 +126,40 @@ class JobAlertTestCase(unittest.TestCase):
 
             return run
 
-        with patch("app.pipeline.get_job", side_effect=fake_job):
-            with patch("app.pipeline.notify_job_start", side_effect=calls.append):
-                with patch(
-                    "app.pipeline.notify_job_finish",
-                    side_effect=lambda *args, **fields: calls.append((args, fields)),
-                ):
-                    self.assertEqual(run_job_blocking("collect"), "ok")
+        with (
+            patch("app.pipeline.get_job", side_effect=fake_job),
+            patch("app.pipeline.notify_job_start", side_effect=calls.append),
+            patch(
+                "app.pipeline.notify_job_finish",
+                side_effect=lambda *args, **fields: calls.append((args, fields)),
+            ),
+        ):
+            self.assertEqual(run_job_blocking("collect"), "ok")
 
         self.assertEqual(calls[0], "collect")
         self.assertEqual(calls[1][0], ("collect", "ok"))
         self.assertEqual(calls[1][1]["new_articles"], 3)
 
     def test_subscribe_outcomes(self):
-        self.assertEqual(
-            subscribe_email("Reader@Example.com")["action"], "created"
-        )
+        self.assertEqual(subscribe_email("Reader@Example.com")["action"], "created")
         self.assertIsNone(subscribe_email("reader@example.com"))
         token = None
         with db.get_connection() as connection:
-            token = connection.execute(
-                "SELECT unsubscribe_token FROM subscribers"
-            ).fetchone()["unsubscribe_token"]
+            token = connection.execute("SELECT unsubscribe_token FROM subscribers").fetchone()[
+                "unsubscribe_token"
+            ]
         result = unsubscribe_with_token(token)
         self.assertEqual(result["status"], "unsubscribed")
         self.assertEqual(result["email"], "reader@example.com")
         again = unsubscribe_with_token(token)
         self.assertEqual(again["status"], "unchanged")
-        self.assertEqual(
-            subscribe_email("reader@example.com")["action"], "reactivated"
-        )
+        self.assertEqual(subscribe_email("reader@example.com")["action"], "reactivated")
 
 
 class SubscriberAlertTestCase(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        temporary.close()
-        self.db_path = Path(temporary.name)
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temporary:
+            self.db_path = Path(temporary.name)
         self.db_patcher = patch.object(db, "DB_PATH", self.db_path)
         self.db_patcher.start()
         rate_limiter.reset()
@@ -193,31 +194,44 @@ class SubscriberAlertTestCase(unittest.TestCase):
         connection.close()
         return status
 
+    def wait_for(self, condition):
+        # The handler replies before notifying, so side effects can land after the response.
+        deadline = time.monotonic() + 2
+        while not condition():
+            if time.monotonic() > deadline:
+                self.fail("side effect did not happen after the response")
+            time.sleep(0.01)
+
     def test_http_notifies_signup_once_and_unsubscribe(self):
         alerts = []
-        with patch("app.server.queue_welcome_email") as welcome, patch(
-            "app.server.notify_subscriber",
-            side_effect=lambda action, email: alerts.append((action, email)),
+        with (
+            patch("app.server.queue_welcome_email") as welcome,
+            patch(
+                "app.server.notify_subscriber",
+                side_effect=lambda action, email: alerts.append((action, email)),
+            ),
         ):
             self.assertEqual(
                 self.post_json("/subscribe", {"email": "Reader@Example.com"}),
                 200,
             )
+            self.wait_for(lambda: welcome.call_count == 1)
             self.assertEqual(
                 self.post_json("/subscribe", {"email": "reader@example.com"}),
                 200,
             )
             with db.get_connection() as connection:
-                token = connection.execute(
-                    "SELECT unsubscribe_token FROM subscribers"
-                ).fetchone()["unsubscribe_token"]
+                token = connection.execute("SELECT unsubscribe_token FROM subscribers").fetchone()[
+                    "unsubscribe_token"
+                ]
             self.assertEqual(self.post_json(f"/unsubscribe/{token}", {}), 200)
+            self.wait_for(lambda: len(alerts) == 2)
             self.assertEqual(self.post_json(f"/unsubscribe/{token}", {}), 200)
             self.assertEqual(
                 self.post_json("/subscribe", {"email": "reader@example.com"}),
                 200,
             )
-            self.assertEqual(welcome.call_count, 2)
+            self.wait_for(lambda: welcome.call_count == 2)
             self.assertEqual(
                 [call.args[0]["action"] for call in welcome.call_args_list],
                 ["created", "reactivated"],

@@ -12,37 +12,23 @@ from app.processor import process_articles
 def process_daily() -> dict:
     init_db()
 
-    lookback_hours = (
-        get_processing_lookback_hours()
-    )
+    lookback_hours = get_processing_lookback_hours()
 
     articles = get_articles_for_daily_processing(
         lookback_hours=lookback_hours,
     )
 
     print()
-    print(
-        "Daily processing window: "
-        f"last {lookback_hours} hours"
-    )
-    print(
-        "Eligible unprocessed articles: "
-        f"{len(articles)}"
-    )
+    print(f"Daily processing window: last {lookback_hours} hours")
+    print(f"Eligible unprocessed articles: {len(articles)}")
 
     summary = process_articles(articles)
     summary["eligible"] = len(articles)
 
     print()
     print("Daily processing complete.")
-    print(
-        "Processed successfully: "
-        f"{summary['processed']}"
-    )
-    print(
-        "Failed/retrying: "
-        f"{summary['failed']}"
-    )
+    print(f"Processed successfully: {summary['processed']}")
+    print(f"Failed/retrying: {summary['failed']}")
     log_event(
         "process_daily",
         eligible=len(articles),
@@ -58,10 +44,7 @@ def run_process_job() -> dict:
 
     print()
     print("=" * 60)
-    print(
-        "Daily classification started at: "
-        f"{started_at.isoformat(timespec='seconds')}"
-    )
+    print(f"Daily classification started at: {started_at.isoformat(timespec='seconds')}")
     print("=" * 60)
 
     summary = process_daily()
@@ -70,10 +53,7 @@ def run_process_job() -> dict:
 
     print()
     print("=" * 60)
-    print(
-        "Daily classification finished at: "
-        f"{finished_at.isoformat(timespec='seconds')}"
-    )
+    print(f"Daily classification finished at: {finished_at.isoformat(timespec='seconds')}")
     print("=" * 60)
 
     return summary

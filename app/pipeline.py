@@ -7,7 +7,6 @@ from app.db import get_connection, init_db
 from app.log import log_event, redact_text
 from app.notify import notify_job_finish, notify_job_start
 
-
 STALE_LOCK_SECONDS = 90
 HEARTBEAT_SECONDS = 20
 
@@ -38,9 +37,7 @@ def _isoformat(value: datetime) -> str:
 def acquire_pipeline_lock(job: str, owner: str) -> bool:
     init_db()
     now = _utc_now()
-    stale_before = _isoformat(
-        now - timedelta(seconds=STALE_LOCK_SECONDS)
-    )
+    stale_before = _isoformat(now - timedelta(seconds=STALE_LOCK_SECONDS))
     current = _isoformat(now)
 
     with get_connection() as connection:
@@ -53,10 +50,7 @@ def acquire_pipeline_lock(job: str, owner: str) -> bool:
             """
         ).fetchone()
 
-        if (
-            row is not None
-            and row["heartbeat_at"] >= stale_before
-        ):
+        if row is not None and row["heartbeat_at"] >= stale_before:
             return False
 
         connection.execute(
@@ -107,9 +101,7 @@ def release_pipeline_lock(owner: str) -> None:
 
 
 def lock_is_fresh() -> bool:
-    stale_before = _isoformat(
-        _utc_now() - timedelta(seconds=STALE_LOCK_SECONDS)
-    )
+    stale_before = _isoformat(_utc_now() - timedelta(seconds=STALE_LOCK_SECONDS))
     with get_connection() as connection:
         row = connection.execute(
             """
@@ -119,10 +111,7 @@ def lock_is_fresh() -> bool:
             """
         ).fetchone()
 
-    return (
-        row is not None
-        and row["heartbeat_at"] >= stale_before
-    )
+    return row is not None and row["heartbeat_at"] >= stale_before
 
 
 def get_job(name: str):
@@ -163,9 +152,7 @@ def _pulse(owner: str, stop: threading.Event) -> None:
         except Exception as error:
             log_event(
                 "job_heartbeat_error",
-                error=redact_text(
-                    f"{type(error).__name__}: {error}"
-                ),
+                error=redact_text(f"{type(error).__name__}: {error}"),
             )
 
 
@@ -193,9 +180,7 @@ def _run_held(job: str, owner: str, function) -> str:
         notify_job_finish(job, "ok", **fields)
         return "ok"
     except Exception as error:
-        message = redact_text(
-            f"{type(error).__name__}: {error}"
-        )
+        message = redact_text(f"{type(error).__name__}: {error}")
         log_event(
             "job_finish",
             job=job,

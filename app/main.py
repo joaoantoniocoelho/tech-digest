@@ -26,9 +26,7 @@ def collect_feeds() -> int:
         feed_options = {}
         if "max_entries" in source:
             feed_options["max_entries"] = source["max_entries"]
-        articles = fetch_feed(
-            name=source["name"], url=source["url"], **feed_options
-        )
+        articles = fetch_feed(name=source["name"], url=source["url"], **feed_options)
 
         print(f"Found: {len(articles)} entries")
 

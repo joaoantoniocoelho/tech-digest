@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "stack": "python",
+  "files": [
+    {
+      "path": "scripts/check",
+      "mode": "new",
+      "sha": "a1aae0b802e96786fcce32c04ced30af3922c6f27e6a85dd99a3ed65c6032aa2"
+    },
+    {
+      "path": "scripts/guardrails.sh",
+      "mode": "new",
+      "sha": "d7208f48984c77a071ada76f1ea6054334081479c6466f27715c1e77f16e891f"
+    },
+    {
+      "path": "scripts/tests-touched.sh",
+      "mode": "new",
+      "sha": "09948bd87abd6ca509e8bf65b48a0113bf335941966aa0cfe22f8be63f31e126"
+    },
+    {
+      "path": ".github/workflows/check.yml",
+      "mode": "new",
+      "sha": "268d62b902a20d007eec231a7b7cb845d96fc120c176385511368aaad1ca9bcf"
+    },
+    {
+      "path": "AGENTS.md",
+      "mode": "new",
+      "sha": "29bf5e16d195fc4156ec5c7568cc5a02b869c1a6b38d42a6d218bc75eed96d97"
+    },
+    {
+      "path": "CLAUDE.md",
+      "mode": "new",
+      "sha": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49"
+    },
+    {
+      "path": "ruff.toml",
+      "mode": "new",
+      "sha": "a8dcb82e24c9bd9d05091d4ed327e1be85807e082b0ee8a61708451dd6bdd830"
+    }
+  ],
+  "gitignore_added": [
+    ".harness/backup/",
+    "docs/plans/"
+  ],
+  "gitignore_created": false,
+  "deps": [
+    {
+      "pm": "pip",
+      "packages": [
+        "ruff",
+        "mypy",
+        "types-PyYAML"
+      ]
+    }
+  ],
+  "settings": {
+    "FORMAT_CMD": "ruff format --check .",
+    "LINT_CMD": "ruff check .",
+    "TYPECHECK_CMD": "mypy app tests",
+    "TEST_CMD": "python -m unittest discover -s tests",
+    "BUILD_CMD": "",
+    "INSTALL_CMD": "pip install -r requirements.txt -r requirements-dev.txt"
+  }
+}

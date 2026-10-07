@@ -12,7 +12,7 @@ runpy.run_path(str(Path(__file__).with_name("_bootstrap.py")))
 
 import yaml
 
-from app import db, processor
+from app import db
 from app.db import (
     get_articles_for_daily_processing,
     get_digest_candidates,
@@ -30,20 +30,16 @@ from app.scoring import calculate_relevance_score
 
 
 def _hours_ago(hours: float) -> str:
-    return (
-        datetime.now(timezone.utc)
-        - timedelta(hours=hours)
-    ).isoformat()
+    return (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
 
 class DailyProcessingTestCase(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.NamedTemporaryFile(
+        with tempfile.NamedTemporaryFile(
             suffix=".db",
             delete=False,
-        )
-        tmp.close()
-        self.db_path = Path(tmp.name)
+        ) as tmp:
+            self.db_path = Path(tmp.name)
         self.db_patcher = patch.object(
             db,
             "DB_PATH",
@@ -72,16 +68,10 @@ class DailyProcessingTestCase(unittest.TestCase):
         delivered_at=None,
     ):
         self._url_counter += 1
-        url = (
-            "https://example.com/article-"
-            f"{self._url_counter}"
-        )
+        url = f"https://example.com/article-{self._url_counter}"
 
         if discovered_at is None:
-            discovered_at = (
-                datetime.now(timezone.utc)
-                .isoformat()
-            )
+            discovered_at = datetime.now(timezone.utc).isoformat()
 
         with db.get_connection() as connection:
             connection.execute(
@@ -286,12 +276,11 @@ class DailyProcessingTestCase(unittest.TestCase):
 
 class ProcessorSafeguardTestCase(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.NamedTemporaryFile(
+        with tempfile.NamedTemporaryFile(
             suffix=".db",
             delete=False,
-        )
-        tmp.close()
-        self.db_path = Path(tmp.name)
+        ) as tmp:
+            self.db_path = Path(tmp.name)
         self.db_patcher = patch.object(
             db,
             "DB_PATH",
@@ -339,10 +328,7 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
         with open("config/interests.yaml") as file:
             profile = yaml.safe_load(file)
 
-        return {
-            feature_id: 0
-            for feature_id in profile["features"]
-        }
+        return {feature_id: 0 for feature_id in profile["features"]}
 
     def _row(self):
         with db.get_connection() as connection:
@@ -353,9 +339,7 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
 
     def test_truncates_long_content_head_and_tail(self):
         content = "a" * 30000
-        prepared = _prepare_classification_content(
-            content
-        )
+        prepared = _prepare_classification_content(content)
 
         self.assertLess(len(prepared), len(content))
         self.assertTrue(prepared.startswith("a" * 20000))
@@ -443,9 +427,7 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
             "Full article content is unavailable",
             classify_article.call_args.kwargs["content"],
         )
-        row_values = [
-            str(value) for value in self._row() if value is not None
-        ]
+        row_values = [str(value) for value in self._row() if value is not None]
         self.assertNotIn(excerpt, row_values)
 
     @patch("app.processor.classify_article")
@@ -506,11 +488,7 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
         eligible = get_articles_for_daily_processing(
             lookback_hours=24,
         )
-        historical = [
-            article
-            for article in eligible
-            if article["id"] == historical_id
-        ]
+        historical = [article for article in eligible if article["id"] == historical_id]
 
         self.assertEqual(historical, [])
 
@@ -580,8 +558,7 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
         self.assertEqual(summary["processed"], 1)
         self.assertEqual(summary["failed"], 0)
         self.assertIn(
-            "Article content unavailable after retry; "
-            "using title/URL metadata only",
+            "Article content unavailable after retry; using title/URL metadata only",
             output.getvalue(),
         )
 
@@ -625,24 +602,12 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
         self.assertIsNone(row["failed_at"])
         self.assertEqual(row["processing_attempts"], 1)
 
-        stored_values = [
-            str(row[key])
-            for key in row.keys()
-            if row[key] is not None
-        ]
+        stored_values = [str(value) for value in dict(row).values() if value is not None]
         self.assertTrue(
-            all(
-                "Full article content is unavailable"
-                not in value
-                for value in stored_values
-            )
+            all("Full article content is unavailable" not in value for value in stored_values)
         )
         self.assertTrue(
-            all(
-                "Do not infer unsupported details"
-                not in value
-                for value in stored_values
-            )
+            all("Do not infer unsupported details" not in value for value in stored_values)
         )
 
         eligible = get_articles_for_daily_processing(
@@ -658,9 +623,7 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
         classify_article,
     ):
         fetch_article_content.return_value = "x" * 300
-        classify_article.side_effect = RuntimeError(
-            "TypeSafe down"
-        )
+        classify_article.side_effect = RuntimeError("TypeSafe down")
 
         for _ in range(MAX_PROCESSING_ATTEMPTS):
             process_articles([self.article])
@@ -706,9 +669,7 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
         classify_article,
     ):
         fetch_article_content.return_value = "x" * 300
-        classify_article.side_effect = RuntimeError(
-            "TypeSafe down"
-        )
+        classify_article.side_effect = RuntimeError("TypeSafe down")
 
         summary = process_articles([self.article])
 
@@ -731,9 +692,7 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
         fetch_article_content,
         classify_article,
     ):
-        fetch_article_content.return_value = (
-            "secret article body " * 20
-        )
+        fetch_article_content.return_value = "secret article body " * 20
         classify_article.return_value = {
             "feature_strengths": self._load_zero_features(),
             "importance": 1,
@@ -744,26 +703,12 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
         process_articles([self.article])
 
         row = self._row()
-        values = [
-            str(row[key])
-            for key in row.keys()
-            if row[key] is not None
-        ]
+        values = [str(value) for value in dict(row).values() if value is not None]
 
-        self.assertTrue(
-            all(
-                "secret article body" not in value
-                for value in values
-            )
-        )
+        self.assertTrue(all("secret article body" not in value for value in values))
 
         with db.get_connection() as connection:
-            columns = {
-                info["name"]
-                for info in connection.execute(
-                    "PRAGMA table_info(articles)"
-                )
-            }
+            columns = {info["name"] for info in connection.execute("PRAGMA table_info(articles)")}
 
         self.assertNotIn("content", columns)
         self.assertNotIn("probabilities", columns)

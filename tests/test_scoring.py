@@ -1,7 +1,7 @@
-from copy import deepcopy
-from pathlib import Path
 import runpy
 import unittest
+from copy import deepcopy
+from pathlib import Path
 
 runpy.run_path(str(Path(__file__).with_name("_bootstrap.py")))
 
@@ -16,10 +16,7 @@ def _load_profile():
 
 
 def _strengths(profile, **overrides):
-    values = {
-        feature_id: 0
-        for feature_id in profile["features"]
-    }
+    values = {feature_id: 0 for feature_id in profile["features"]}
     values.update(overrides)
     return values
 
@@ -73,16 +70,12 @@ class RelevanceScoringTestCase(unittest.TestCase):
             leading_tech_company_major_development=2,
         )
         profile_without_floor = deepcopy(self.profile)
-        del profile_without_floor["features"][
-            "major_ai_model_development"
-        ]["direct_match_score_floor"]
+        del profile_without_floor["features"]["major_ai_model_development"][
+            "direct_match_score_floor"
+        ]
 
-        natural_score = calculate_relevance_score(
-            strengths, profile_without_floor, importance=3
-        )
-        score = calculate_relevance_score(
-            strengths, self.profile, importance=3
-        )
+        natural_score = calculate_relevance_score(strengths, profile_without_floor, importance=3)
+        score = calculate_relevance_score(strengths, self.profile, importance=3)
 
         self.assertGreater(natural_score, 85)
         self.assertEqual(score, natural_score)
@@ -98,9 +91,7 @@ class RelevanceScoringTestCase(unittest.TestCase):
 
     def test_importance_and_negative_penalty_run_before_floor(self):
         profile = deepcopy(self.profile)
-        profile["features"]["major_ai_model_development"][
-            "direct_match_score_floor"
-        ] = 70
+        profile["features"]["major_ai_model_development"]["direct_match_score_floor"] = 70
         strengths = _strengths(
             profile,
             major_ai_model_development=2,
@@ -128,14 +119,12 @@ class RelevanceScoringTestCase(unittest.TestCase):
         for invalid_floor in (-1, 101, "85", True, None, float("nan")):
             with self.subTest(invalid_floor=invalid_floor):
                 profile = deepcopy(self.profile)
-                profile["features"]["major_ai_model_development"][
-                    "direct_match_score_floor"
-                ] = invalid_floor
+                profile["features"]["major_ai_model_development"]["direct_match_score_floor"] = (
+                    invalid_floor
+                )
 
                 with self.assertRaises(ValueError):
-                    calculate_relevance_score(
-                        _strengths(profile), profile, importance=1
-                    )
+                    calculate_relevance_score(_strengths(profile), profile, importance=1)
 
     def test_zig_like_article_remains_digestible(self):
         score = calculate_relevance_score(

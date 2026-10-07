@@ -18,9 +18,8 @@ from app.subscribers import subscribe_email
 
 class HttpApiTestCase(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        temporary.close()
-        self.db_path = Path(temporary.name)
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temporary:
+            self.db_path = Path(temporary.name)
         self.db_patcher = patch.object(db, "DB_PATH", self.db_path)
         self.db_patcher.start()
         rate_limiter.reset()
@@ -201,9 +200,7 @@ class HttpApiTestCase(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertEqual(payload["page"], page)
                 self.assertEqual(payload["has_more"], has_more)
-                self.assertEqual(
-                    [edition["date"] for edition in payload["editions"]], dates
-                )
+                self.assertEqual([edition["date"] for edition in payload["editions"]], dates)
 
     def test_exact_page_boundary_has_no_next_page(self):
         self.insert_editions(20)
@@ -274,9 +271,7 @@ class HttpApiTestCase(unittest.TestCase):
             "https://digest.joaoac.com",
         )
         with db.get_connection() as connection:
-            rows = connection.execute(
-                "SELECT email, status FROM subscribers"
-            ).fetchall()
+            rows = connection.execute("SELECT email, status FROM subscribers").fetchall()
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["email"], "reader@example.com")
         self.assertEqual(rows[0]["status"], "active")
@@ -396,9 +391,7 @@ class HttpApiTestCase(unittest.TestCase):
             original = connection.execute(
                 "SELECT created_at, unsubscribe_token FROM subscribers"
             ).fetchone()
-            connection.execute(
-                "UPDATE subscribers SET created_at = '2026-01-01T00:00:00+00:00'"
-            )
+            connection.execute("UPDATE subscribers SET created_at = '2026-01-01T00:00:00+00:00'")
 
         unsubscribe_status, _headers, _body = self.request(
             "POST",
@@ -421,9 +414,9 @@ class HttpApiTestCase(unittest.TestCase):
         self.assertEqual(row["acquisition_source"], "x")
         self.assertIsNone(row["utm_source"])
         with db.get_connection() as connection:
-            created_at = connection.execute(
-                "SELECT created_at FROM subscribers"
-            ).fetchone()["created_at"]
+            created_at = connection.execute("SELECT created_at FROM subscribers").fetchone()[
+                "created_at"
+            ]
         self.assertEqual(created_at, "2026-01-01T00:00:00+00:00")
         self.assertEqual(self.queue_welcome.call_count, 2)
 
@@ -550,18 +543,16 @@ class HttpApiTestCase(unittest.TestCase):
     def test_unsubscribe_flow_and_invalid_token(self):
         subscribe_email("reader@example.com")
         with db.get_connection() as connection:
-            token = connection.execute(
-                "SELECT unsubscribe_token FROM subscribers"
-            ).fetchone()["unsubscribe_token"]
+            token = connection.execute("SELECT unsubscribe_token FROM subscribers").fetchone()[
+                "unsubscribe_token"
+            ]
 
         page_status, _headers, page = self.request("GET", f"/unsubscribe/{token}")
         self.assertEqual(page_status, 200)
         self.assertIn(b"Confirm that you want to stop", page)
         self.assertNotIn(token.encode(), page.split(b"action=", 1)[0])
         with db.get_connection() as connection:
-            status = connection.execute(
-                "SELECT status FROM subscribers"
-            ).fetchone()["status"]
+            status = connection.execute("SELECT status FROM subscribers").fetchone()["status"]
         self.assertEqual(status, "active")
 
         post_status, _headers, body = self.request(
@@ -571,16 +562,12 @@ class HttpApiTestCase(unittest.TestCase):
         self.assertEqual(post_status, 200)
         self.assertIn(b"no longer receive", body)
         with db.get_connection() as connection:
-            status = connection.execute(
-                "SELECT status FROM subscribers"
-            ).fetchone()["status"]
+            status = connection.execute("SELECT status FROM subscribers").fetchone()["status"]
         self.assertEqual(status, "unsubscribed")
 
         self.post_json("/subscribe", {"email": "reader@example.com"})
         with db.get_connection() as connection:
-            row = connection.execute(
-                "SELECT status, unsubscribe_token FROM subscribers"
-            ).fetchone()
+            row = connection.execute("SELECT status, unsubscribe_token FROM subscribers").fetchone()
         self.assertEqual(row["status"], "active")
         self.assertEqual(row["unsubscribe_token"], token)
 
@@ -620,6 +607,7 @@ class HttpApiTestCase(unittest.TestCase):
                 def run():
                     started.set()
                     return {"new_articles": 0}
+
                 return run
 
             with patch("app.pipeline.get_job", side_effect=fake_job):

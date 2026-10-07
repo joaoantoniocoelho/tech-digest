@@ -11,7 +11,6 @@ runpy.run_path(str(Path(__file__).with_name("_bootstrap.py")))
 from app import db, main
 from app.rss import fetch_feed
 
-
 RSS_FEED = b"""<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0"><channel><title>Example feed</title>
 <item><title>First</title><link>https://example.com/first</link></item>
@@ -43,9 +42,8 @@ class RSSMaxEntriesTests(unittest.TestCase):
 
 class CollectionTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        temporary.close()
-        self.db_path = Path(temporary.name)
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temporary:
+            self.db_path = Path(temporary.name)
         self.db_patcher = patch.object(db, "DB_PATH", self.db_path)
         self.db_patcher.start()
         db.init_db()
@@ -65,9 +63,11 @@ class CollectionTests(unittest.TestCase):
             file.write(config)
             config_path = Path(file.name)
         self.addCleanup(config_path.unlink)
-        with patch.object(main, "Path", return_value=config_path):
-            with redirect_stdout(StringIO()):
-                main.collect_feeds()
+        with (
+            patch.object(main, "Path", return_value=config_path),
+            redirect_stdout(StringIO()),
+        ):
+            main.collect_feeds()
         fetch_feed.assert_called_once_with(
             name="OpenAI", url="https://openai.com/news/rss.xml", max_entries=50
         )
@@ -82,19 +82,21 @@ class CollectionTests(unittest.TestCase):
             file.write(config)
             config_path = Path(file.name)
         self.addCleanup(config_path.unlink)
-        fetch_feed.return_value = [{
-            "source": "Hacker News",
-            "title": "RSS article",
-            "url": "https://example.com/rss-article",
-            "published_at": "2026-09-22",
-        }]
-        with patch.object(main, "Path", return_value=config_path):
-            with redirect_stdout(StringIO()) as output:
-                self.assertEqual(main.collect_feeds(), 1)
-                self.assertEqual(main.collect_feeds(), 0)
-        fetch_feed.assert_called_with(
-            name="Hacker News", url="https://news.ycombinator.com/rss"
-        )
+        fetch_feed.return_value = [
+            {
+                "source": "Hacker News",
+                "title": "RSS article",
+                "url": "https://example.com/rss-article",
+                "published_at": "2026-09-22",
+            }
+        ]
+        with (
+            patch.object(main, "Path", return_value=config_path),
+            redirect_stdout(StringIO()) as output,
+        ):
+            self.assertEqual(main.collect_feeds(), 1)
+            self.assertEqual(main.collect_feeds(), 0)
+        fetch_feed.assert_called_with(name="Hacker News", url="https://news.ycombinator.com/rss")
         self.assertIn("Collecting: Hacker News", output.getvalue())
         self.assertIn("Found: 1 entries", output.getvalue())
         self.assertIn("New: 0", output.getvalue())

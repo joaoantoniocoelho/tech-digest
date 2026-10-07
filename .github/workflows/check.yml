@@ -1,0 +1,23 @@
+# Installed by agent-harness: runs the same scripts/check the agents run locally.
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: scripts/check
+        env:
+          BASE_REF: origin/${{ github.base_ref || 'master' }}
+          CI: "true"

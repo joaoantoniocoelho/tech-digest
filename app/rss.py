@@ -3,7 +3,6 @@ from html.parser import HTMLParser
 import feedparser
 import httpx
 
-
 MAX_FEED_EXCERPT_LENGTH = 2500
 FEED_TIMEOUT_SECONDS = 15.0
 _UNSET = object()
@@ -69,10 +68,7 @@ def _download_feed(name: str, url: str) -> bytes | None:
             follow_redirects=True,
             timeout=FEED_TIMEOUT_SECONDS,
             headers={
-                "User-Agent": (
-                    "tech-digest/0.1 "
-                    "(https://github.com/joaoantoniocoelho/tech-digest)"
-                )
+                "User-Agent": ("tech-digest/0.1 (https://github.com/joaoantoniocoelho/tech-digest)")
             },
         )
 
@@ -81,31 +77,20 @@ def _download_feed(name: str, url: str) -> bytes | None:
         return response.content
 
     except httpx.TimeoutException:
-        print(
-            f"[WARN] Feed request timed out after "
-            f"{FEED_TIMEOUT_SECONDS:.0f}s: {name}"
-        )
+        print(f"[WARN] Feed request timed out after {FEED_TIMEOUT_SECONDS:.0f}s: {name}")
 
     except httpx.HTTPStatusError as error:
-        print(
-            f"[WARN] Feed returned HTTP "
-            f"{error.response.status_code}: {name}"
-        )
+        print(f"[WARN] Feed returned HTTP {error.response.status_code}: {name}")
 
     except httpx.HTTPError as error:
-        print(
-            f"[WARN] Failed to download feed "
-            f"{name}: {error}"
-        )
+        print(f"[WARN] Failed to download feed {name}: {error}")
 
     return None
 
 
 def fetch_feed(name: str, url: str, max_entries=_UNSET):
     if max_entries is not _UNSET and (
-        isinstance(max_entries, bool)
-        or not isinstance(max_entries, int)
-        or max_entries <= 0
+        isinstance(max_entries, bool) or not isinstance(max_entries, int) or max_entries <= 0
     ):
         raise ValueError("max_entries must be a positive integer")
 
@@ -124,10 +109,7 @@ def fetch_feed(name: str, url: str, max_entries=_UNSET):
         return []
 
     if feed.bozo:
-        print(
-            f"[WARN] Feed reported a parsing issue "
-            f"but returned entries: {name}"
-        )
+        print(f"[WARN] Feed reported a parsing issue but returned entries: {name}")
 
     articles = []
 
@@ -147,10 +129,7 @@ def fetch_feed(name: str, url: str, max_entries=_UNSET):
                     "Untitled",
                 ),
                 "url": article_url,
-                "published_at": (
-                    entry.get("published")
-                    or entry.get("updated")
-                ),
+                "published_at": (entry.get("published") or entry.get("updated")),
                 "feed_excerpt": _get_feed_excerpt(entry),
             }
         )

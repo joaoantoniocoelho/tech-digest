@@ -7,3 +7,5 @@ data/*.db-wal
 data/*.db-shm
 logs/
 preview/
+docs/plans/
+.harness/backup/

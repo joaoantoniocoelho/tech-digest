@@ -43,9 +43,7 @@ def send_welcome_email(subscriber: dict) -> bool:
             "welcome_send",
             status="error",
             recipient=recipient,
-            error=redact_text(
-                f"{type(error).__name__}: {error}"
-            ),
+            error=redact_text(f"{type(error).__name__}: {error}"),
         )
         return False
 

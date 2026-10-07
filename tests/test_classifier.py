@@ -47,10 +47,7 @@ def _fake_response(scores_by_id):
 
 
 def _complete_scores(features, overrides=None):
-    scores = {
-        feature_id: _fake_score_answer(0.0)
-        for feature_id in features
-    }
+    scores = {feature_id: _fake_score_answer(0.0) for feature_id in features}
     scores[IMPORTANCE_ID] = _fake_score_answer(1.0)
 
     if overrides:
@@ -60,10 +57,7 @@ def _complete_scores(features, overrides=None):
 
 
 def _zero_strengths(features):
-    return {
-        feature_id: 0
-        for feature_id in features
-    }
+    return {feature_id: 0 for feature_id in features}
 
 
 class FeatureConfigTestCase(unittest.TestCase):
@@ -260,9 +254,7 @@ class ClassifyArticleTestCase(unittest.TestCase):
 
     def _mock_client(self, mock_get_client, scores):
         mock_client = MagicMock(spec=TypeSafeClient)
-        mock_client.system_one.return_value = (
-            _fake_response(scores)
-        )
+        mock_client.system_one.return_value = _fake_response(scores)
         mock_get_client.return_value = mock_client
         return mock_client
 
@@ -276,9 +268,7 @@ class ClassifyArticleTestCase(unittest.TestCase):
             features,
             {
                 "ai_agents": _fake_score_answer(1.6),
-                "software_engineering_practices": (
-                    _fake_score_answer(1.4)
-                ),
+                "software_engineering_practices": (_fake_score_answer(1.4)),
                 "crypto_web3": _fake_score_answer(1.8),
                 IMPORTANCE_ID: _fake_score_answer(2.1),
             },
@@ -336,9 +326,7 @@ class ClassifyArticleTestCase(unittest.TestCase):
             2,
         )
         self.assertEqual(
-            result["feature_strengths"][
-                "software_engineering_practices"
-            ],
+            result["feature_strengths"]["software_engineering_practices"],
             1,
         )
         self.assertEqual(
@@ -364,9 +352,7 @@ class ClassifyArticleTestCase(unittest.TestCase):
         self,
         mock_get_client,
     ):
-        scores = _complete_scores(
-            self.profile["features"]
-        )
+        scores = _complete_scores(self.profile["features"])
         mock_client = self._mock_client(
             mock_get_client,
             scores,
@@ -384,9 +370,7 @@ class ClassifyArticleTestCase(unittest.TestCase):
             )
 
         self.assertEqual(
-            mock_client.system_one.call_args.kwargs[
-                "model"
-            ],
+            mock_client.system_one.call_args.kwargs["model"],
             "jev-pinned-test",
         )
 
@@ -461,9 +445,7 @@ class DigestWhyPrefixTestCase(unittest.TestCase):
                     {
                         "title": "Example",
                         "relevance_score": 80,
-                        "why_interesting": (
-                            "AI agents · Developer tools"
-                        ),
+                        "why_interesting": ("AI agents · Developer tools"),
                         "source": "Test",
                         "topics": ["AI agents"],
                         "url": "https://example.com",
