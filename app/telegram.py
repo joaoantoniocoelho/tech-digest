@@ -2,7 +2,6 @@ import os
 
 import httpx
 
-
 TELEGRAM_API_BASE = "https://api.telegram.org"
 TELEGRAM_MESSAGE_LIMIT = 4096
 TELEGRAM_TIMEOUT_SECONDS = 15.0
@@ -12,9 +11,7 @@ def _get_bot_token() -> str:
     token = os.getenv("TELEGRAM_BOT_TOKEN")
 
     if not token:
-        raise RuntimeError(
-            "TELEGRAM_BOT_TOKEN is not configured"
-        )
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured")
 
     return token
 
@@ -23,9 +20,7 @@ def _get_chat_id() -> str:
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
     if not chat_id:
-        raise RuntimeError(
-            "TELEGRAM_CHAT_ID is not configured"
-        )
+        raise RuntimeError("TELEGRAM_CHAT_ID is not configured")
 
     return chat_id
 
@@ -33,10 +28,7 @@ def _get_chat_id() -> str:
 def _api_url(method: str) -> str:
     token = _get_bot_token()
 
-    return (
-        f"{TELEGRAM_API_BASE}"
-        f"/bot{token}/{method}"
-    )
+    return f"{TELEGRAM_API_BASE}/bot{token}/{method}"
 
 
 def get_updates() -> list:
@@ -50,9 +42,7 @@ def get_updates() -> list:
     payload = response.json()
 
     if not payload.get("ok"):
-        raise RuntimeError(
-            f"Telegram API error: {payload}"
-        )
+        raise RuntimeError(f"Telegram API error: {payload}")
 
     return payload.get("result", [])
 
@@ -64,9 +54,7 @@ def find_chat_ids() -> list[dict]:
 
     for update in updates:
         message = (
-            update.get("message")
-            or update.get("edited_message")
-            or update.get("channel_post")
+            update.get("message") or update.get("edited_message") or update.get("channel_post")
         )
 
         if not message:
@@ -148,9 +136,7 @@ def send_message(
         payload = response.json()
 
         if not payload.get("ok"):
-            raise RuntimeError(
-                f"Telegram API error: {payload}"
-            )
+            raise RuntimeError(f"Telegram API error: {payload}")
 
         results.append(payload["result"])
 

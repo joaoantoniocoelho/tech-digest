@@ -17,6 +17,7 @@ from app.subscribers import (
     list_active_subscribers,
     unsubscribe_url,
 )
+
 # from app.telegram import send_message
 
 
@@ -89,9 +90,7 @@ def send_daily_digest() -> dict:
                 "email_send",
                 status="error",
                 recipient=recipient,
-                error=redact_text(
-                    f"{type(error).__name__}: {error}"
-                ),
+                error=redact_text(f"{type(error).__name__}: {error}"),
             )
             continue
 
@@ -121,14 +120,10 @@ def send_daily_digest() -> dict:
     if sent:
         print(f"Digest sent with {len(articles)} articles.")
         print(f"Emails sent: {sent}. Failed: {failed}.")
-        print(
-            f"Marked {len(articles)} articles as delivered."
-        )
+        print(f"Marked {len(articles)} articles as delivered.")
         return summary
 
-    raise RuntimeError(
-        f"Digest email failed for all {failed} subscribers"
-    )
+    raise RuntimeError(f"Digest email failed for all {failed} subscribers")
 
 
 def _publish_edition(articles: list[dict], sent_at: datetime) -> None:

@@ -15,7 +15,6 @@ from app.digest import render_text_welcome
 from app.email import WELCOME_SUBJECT, render_html_welcome
 from app.welcome import send_welcome_email
 
-
 SENT_AT = datetime(
     2026,
     9,
@@ -57,9 +56,8 @@ def _edition():
 
 class LatestEditionTestCase(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        temporary.close()
-        self.db_path = Path(temporary.name)
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temporary:
+            self.db_path = Path(temporary.name)
         self.db_patcher = patch.object(db, "DB_PATH", self.db_path)
         self.db_patcher.start()
         db.init_db()
@@ -150,9 +148,7 @@ class RenderWelcomeTestCase(unittest.TestCase):
         self.assertIn("2. Second story", text)
         self.assertNotIn("[90]", text)
         self.assertEqual(text.count("Unsubscribe:"), 1)
-        self.assertTrue(
-            text.endswith("Unsubscribe: https://digest.joaoac.com/unsubscribe/tok")
-        )
+        self.assertTrue(text.endswith("Unsubscribe: https://digest.joaoac.com/unsubscribe/tok"))
 
     def test_text_without_edition(self):
         text = render_text_welcome(
@@ -177,12 +173,14 @@ class SendWelcomeEmailTestCase(unittest.TestCase):
         latest.return_value = _edition()
         send_email_mock.return_value = {"id": "email_1"}
 
-        with patch.dict(
-            os.environ,
-            {"PUBLIC_BASE_URL": "https://digest.joaoac.com"},
+        with (
+            patch.dict(
+                os.environ,
+                {"PUBLIC_BASE_URL": "https://digest.joaoac.com"},
+            ),
+            redirect_stdout(StringIO()) as output,
         ):
-            with redirect_stdout(StringIO()) as output:
-                self.assertTrue(send_welcome_email(self._subscriber()))
+            self.assertTrue(send_welcome_email(self._subscriber()))
 
         kwargs = send_email_mock.call_args.kwargs
         self.assertEqual(kwargs["to"], ["reader@example.com"])
@@ -203,16 +201,16 @@ class SendWelcomeEmailTestCase(unittest.TestCase):
     @patch("app.welcome.get_latest_edition")
     def test_failure_is_logged_and_redacted(self, latest, send_email_mock):
         latest.return_value = None
-        send_email_mock.side_effect = RuntimeError(
-            "Resend API error (422): bad reader@example.com"
-        )
+        send_email_mock.side_effect = RuntimeError("Resend API error (422): bad reader@example.com")
 
-        with patch.dict(
-            os.environ,
-            {"PUBLIC_BASE_URL": "https://digest.joaoac.com"},
+        with (
+            patch.dict(
+                os.environ,
+                {"PUBLIC_BASE_URL": "https://digest.joaoac.com"},
+            ),
+            redirect_stdout(StringIO()) as output,
         ):
-            with redirect_stdout(StringIO()) as output:
-                self.assertFalse(send_welcome_email(self._subscriber()))
+            self.assertFalse(send_welcome_email(self._subscriber()))
 
         logged = output.getvalue()
         self.assertIn("event=welcome_send status=error", logged)

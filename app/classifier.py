@@ -1,6 +1,7 @@
 import atexit
 import math
 import os
+from typing import TypeGuard
 
 from typesafe_sdk import Score, TypeSafeClient
 
@@ -8,7 +9,6 @@ from app.scoring import (
     STRENGTH_MULTIPLIERS,
     calculate_relevance_score,
 )
-
 
 IMPORTANCE_ID = "importance"
 MAX_WHY_FEATURES = 3
@@ -35,14 +35,8 @@ When uncertain between 1 and 2, prefer 1.
 """.strip()
 
 FEATURE_STRENGTH_CRITERIA = [
-    (
-        "0: The feature does not meaningfully apply. "
-        "Default here unless there is concrete evidence."
-    ),
-    (
-        "1: The feature is explicitly and meaningfully present, "
-        "but secondary to the main subject."
-    ),
+    ("0: The feature does not meaningfully apply. Default here unless there is concrete evidence."),
+    ("1: The feature is explicitly and meaningfully present, but secondary to the main subject."),
     (
         "2: The feature is central to the article and an important "
         "part of what the article is actually about."
@@ -52,10 +46,7 @@ FEATURE_STRENGTH_CRITERIA = [
 IMPORTANCE_CRITERIA = [
     "0: Routine, shallow, minor, or low-information article.",
     "1: A normal useful or interesting article.",
-    (
-        "2: Notably insightful, novel, practical, "
-        "or consequential article."
-    ),
+    ("2: Notably insightful, novel, practical, or consequential article."),
     (
         "3: Exceptional / major development / unusually "
         "important article. This level should be rare."
@@ -97,9 +88,7 @@ def _require_api_key():
     ).strip()
 
     if not api_key:
-        raise ValueError(
-            "TYPESAFE_API_KEY is not configured"
-        )
+        raise ValueError("TYPESAFE_API_KEY is not configured")
 
 
 def _model_name() -> str:
@@ -140,9 +129,7 @@ def _feature_label(
     label = feature.get("label")
 
     if not label or not str(label).strip():
-        raise ValueError(
-            f"Feature {feature_id} is missing a label."
-        )
+        raise ValueError(f"Feature {feature_id} is missing a label.")
 
     return str(label).strip()
 
@@ -174,7 +161,7 @@ def discretize_importance(score: float) -> int:
     return 3
 
 
-def _is_numeric_score(value) -> bool:
+def _is_numeric_score(value) -> TypeGuard[int | float]:
     return isinstance(value, (int, float)) and not isinstance(
         value,
         bool,
@@ -188,21 +175,14 @@ def _validate_scores(
     scores = getattr(response, "scores", None)
 
     if not isinstance(scores, dict):
-        raise ValueError(
-            "Model returned no score answers."
-        )
+        raise ValueError("Model returned no score answers.")
 
-    expected_ids = set(features.keys()) | {
-        IMPORTANCE_ID
-    }
+    expected_ids = set(features.keys()) | {IMPORTANCE_ID}
     returned_ids = set(scores.keys())
     missing = expected_ids - returned_ids
 
     if missing:
-        raise ValueError(
-            "Incomplete classification scores. "
-            f"Missing: {sorted(missing)}."
-        )
+        raise ValueError(f"Incomplete classification scores. Missing: {sorted(missing)}.")
 
     for answer_id, answer in scores.items():
         if answer_id not in expected_ids:
@@ -211,10 +191,7 @@ def _validate_scores(
         raw_score = getattr(answer, "score", None)
 
         if not _is_numeric_score(raw_score):
-            raise ValueError(
-                "Invalid score for "
-                f"{answer_id}: {raw_score}"
-            )
+            raise ValueError(f"Invalid score for {answer_id}: {raw_score}")
 
 
 def _optional_block(title: str, value) -> str:
@@ -249,9 +226,7 @@ def _feature_instructions(feature: dict) -> str:
         ),
     ]
 
-    return "\n\n".join(
-        part for part in parts if part
-    )
+    return "\n\n".join(part for part in parts if part)
 
 
 def _build_questions(
@@ -263,9 +238,7 @@ def _build_questions(
         _feature_label(feature_id, feature)
 
         questions[feature_id] = Score(
-            instructions=_feature_instructions(
-                feature
-            ),
+            instructions=_feature_instructions(feature),
             criteria=FEATURE_STRENGTH_CRITERIA,
         )
 
@@ -284,9 +257,7 @@ def select_top_positive_features(
 ) -> list[str]:
     candidates = []
 
-    for feature_id, strength in (
-        feature_strengths.items()
-    ):
+    for feature_id, strength in feature_strengths.items():
         if strength < 1:
             continue
 
@@ -296,10 +267,7 @@ def select_top_positive_features(
         if weight <= 0:
             continue
 
-        contribution = (
-            abs(weight)
-            * STRENGTH_MULTIPLIERS[strength]
-        )
+        contribution = abs(weight) * STRENGTH_MULTIPLIERS[strength]
 
         candidates.append(
             (
@@ -312,10 +280,7 @@ def select_top_positive_features(
 
     candidates.sort()
 
-    return [
-        item[3]
-        for item in candidates[:limit]
-    ]
+    return [item[3] for item in candidates[:limit]]
 
 
 def _build_why_and_topics(
@@ -348,9 +313,7 @@ def _match_counts(
     related = []
     penalties = []
 
-    for feature_id, strength in (
-        feature_strengths.items()
-    ):
+    for feature_id, strength in feature_strengths.items():
         if strength < 1:
             continue
 
@@ -404,24 +367,14 @@ def evaluate_article(
 
     for feature_id in features:
         answer = response.scores[feature_id]
-        feature_strengths[feature_id] = (
-            discretize_feature_score(
-                answer.score
-            )
-        )
+        feature_strengths[feature_id] = discretize_feature_score(answer.score)
 
-    importance_answer = response.scores[
-        IMPORTANCE_ID
-    ]
-    importance = discretize_importance(
-        importance_answer.score
-    )
+    importance_answer = response.scores[IMPORTANCE_ID]
+    importance = discretize_importance(importance_answer.score)
 
-    why_interesting, topics = (
-        _build_why_and_topics(
-            feature_strengths=feature_strengths,
-            features=features,
-        )
+    why_interesting, topics = _build_why_and_topics(
+        feature_strengths=feature_strengths,
+        features=features,
     )
 
     relevance_score = calculate_relevance_score(
@@ -456,13 +409,9 @@ def classify_article(
     )
 
     return {
-        "feature_strengths": result[
-            "feature_strengths"
-        ],
+        "feature_strengths": result["feature_strengths"],
         "importance": result["importance"],
-        "why_interesting": result[
-            "why_interesting"
-        ],
+        "why_interesting": result["why_interesting"],
         "topics": result["topics"],
     }
 
@@ -480,17 +429,13 @@ def is_duplicate_story(
     def story(article):
         return {
             "title": article["title"],
-            "excerpt": (
-                article.get("feed_excerpt") or ""
-            ).strip()[:500],
+            "excerpt": (article.get("feed_excerpt") or "").strip()[:500],
         }
 
     response = _get_client().system_one(
         state={
             "candidate": story(candidate),
-            "selected_stories": [
-                story(article) for article in selected
-            ],
+            "selected_stories": [story(article) for article in selected],
         },
         questions={
             "duplicate": Score(
@@ -520,19 +465,10 @@ def is_duplicate_story(
     )
 
     scores = getattr(response, "scores", None)
-    answer = (
-        scores.get("duplicate")
-        if isinstance(scores, dict)
-        else None
-    )
+    answer = scores.get("duplicate") if isinstance(scores, dict) else None
     raw_score = getattr(answer, "score", None)
 
-    if (
-        not _is_numeric_score(raw_score)
-        or not math.isfinite(raw_score)
-    ):
-        raise ValueError(
-            "Model returned an invalid duplicate score."
-        )
+    if not _is_numeric_score(raw_score) or not math.isfinite(raw_score):
+        raise ValueError("Model returned an invalid duplicate score.")
 
     return raw_score >= 1.5

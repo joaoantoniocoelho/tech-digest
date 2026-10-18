@@ -1,0 +1,13 @@
+# Based on the agent-harness default, with the repo-specific exceptions below.
+line-length = 100
+
+[lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RET", "C90"]
+
+[lint.per-file-ignores]
+# Test modules import app code only after runpy loads tests/_bootstrap.py (sys.path/cwd setup).
+"tests/*" = ["E402"]
+
+[lint.mccabe]
+# Raised from 10 so the route dispatcher and the documented scoring formula stay as written.
+max-complexity = 16

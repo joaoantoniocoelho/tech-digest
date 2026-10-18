@@ -3,7 +3,6 @@ import os
 from app.log import log_event, redact_email, redact_text
 from app.telegram import send_message
 
-
 _JOB_LABELS = {
     "collect": "Busca de notícias",
     "process": "Classificação",
@@ -33,9 +32,7 @@ def notify(text: str) -> None:
         log_event(
             "telegram_notify",
             status="error",
-            error=redact_text(
-                f"{type(error).__name__}: {error}"
-            ),
+            error=redact_text(f"{type(error).__name__}: {error}"),
         )
 
 

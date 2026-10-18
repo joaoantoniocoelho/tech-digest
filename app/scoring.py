@@ -68,15 +68,11 @@ def calculate_relevance_score(
                 or not isinstance(floor, (int, float))
                 or not 0 <= floor <= 100
             ):
-                raise ValueError(
-                    "direct_match_score_floor must be a number between 0 and 100"
-                )
+                raise ValueError("direct_match_score_floor must be a number between 0 and 100")
 
     for feature_id, strength in feature_strengths.items():
         if strength == 2:
-            floor = profile["features"][feature_id].get(
-                "direct_match_score_floor"
-            )
+            floor = profile["features"][feature_id].get("direct_match_score_floor")
             if floor is not None:
                 score = max(score, floor)
 

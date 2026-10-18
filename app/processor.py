@@ -1,8 +1,8 @@
 import yaml
 
 from app.classifier import (
-    classify_article,
     _match_counts,
+    classify_article,
 )
 from app.content import fetch_article_content
 from app.db import (
@@ -11,7 +11,6 @@ from app.db import (
     save_classification,
 )
 from app.scoring import calculate_relevance_score
-
 
 MAX_PROCESSING_ATTEMPTS = 3
 MIN_FEED_EXCERPT_LENGTH = 100
@@ -24,9 +23,7 @@ CLASSIFICATION_CONTENT_TAIL_LENGTH = 5000
 def _sanitize_error(error: Exception) -> str:
     from app.log import redact_text
 
-    return redact_text(
-        f"{type(error).__name__}: {error}"
-    )
+    return redact_text(f"{type(error).__name__}: {error}")
 
 
 def _stored_processing_attempts(article_id: int) -> int:
@@ -75,27 +72,14 @@ def _get_fallback_content(article):
 def _prepare_classification_content(
     content: str,
 ) -> str:
-    if (
-        len(content)
-        <= MAX_CLASSIFICATION_CONTENT_LENGTH
-    ):
+    if len(content) <= MAX_CLASSIFICATION_CONTENT_LENGTH:
         return content
 
-    head = content[
-        :CLASSIFICATION_CONTENT_HEAD_LENGTH
-    ]
+    head = content[:CLASSIFICATION_CONTENT_HEAD_LENGTH]
 
-    tail = content[
-        -CLASSIFICATION_CONTENT_TAIL_LENGTH:
-    ]
+    tail = content[-CLASSIFICATION_CONTENT_TAIL_LENGTH:]
 
-    return (
-        head
-        + "\n\n"
-        + "[... article content omitted ...]"
-        + "\n\n"
-        + tail
-    )
+    return head + "\n\n" + "[... article content omitted ...]" + "\n\n" + tail
 
 
 def _record_failure(
@@ -111,15 +95,9 @@ def _record_failure(
     attempts = status["processing_attempts"]
 
     if status["failed_at"]:
-        print(
-            f"Marked as failed after "
-            f"{attempts} attempts."
-        )
+        print(f"Marked as failed after {attempts} attempts.")
     else:
-        print(
-            f"Attempt {attempts}/"
-            f"{MAX_PROCESSING_ATTEMPTS}."
-        )
+        print(f"Attempt {attempts}/{MAX_PROCESSING_ATTEMPTS}.")
 
 
 def _print_match_summary(
@@ -132,29 +110,16 @@ def _print_match_summary(
         features=profile["features"],
     )
 
-    print(
-        f"Feature matches: "
-        f"{len(matches['direct'])} direct, "
-        f"{len(matches['related'])} related"
-    )
+    print(f"Feature matches: {len(matches['direct'])} direct, {len(matches['related'])} related")
 
     if matches["direct"]:
-        print(
-            "Direct: "
-            + ", ".join(matches["direct"])
-        )
+        print("Direct: " + ", ".join(matches["direct"]))
 
     if matches["related"]:
-        print(
-            "Related: "
-            + ", ".join(matches["related"])
-        )
+        print("Related: " + ", ".join(matches["related"]))
 
     if matches["penalties"]:
-        print(
-            "Penalties: "
-            + ", ".join(matches["penalties"])
-        )
+        print("Penalties: " + ", ".join(matches["penalties"]))
 
     if why_interesting:
         print(f"Why: {why_interesting}")
@@ -166,59 +131,28 @@ def _process_article(
 ) -> bool:
     print()
 
-    print(
-        f"Processing: "
-        f"[{article['source']}] "
-        f"{article['title']}"
-    )
+    print(f"Processing: [{article['source']}] {article['title']}")
 
     try:
-        content = fetch_article_content(
-            article["url"]
-        )
+        content = fetch_article_content(article["url"])
 
         if content:
-            print(
-                f"Extracted: "
-                f"{len(content)} characters"
-            )
+            print(f"Extracted: {len(content)} characters")
 
         else:
-            content = _get_fallback_content(
-                article
-            )
+            content = _get_fallback_content(article)
 
             if content:
-                print(
-                    "Article extraction failed; "
-                    f"using RSS excerpt "
-                    f"({len(content)} characters)"
-                )
+                print(f"Article extraction failed; using RSS excerpt ({len(content)} characters)")
 
             else:
-                if (
-                    _stored_processing_attempts(
-                        article["id"]
-                    )
-                    >= 1
-                ):
-                    print(
-                        "Article content unavailable "
-                        "after retry; using title/URL "
-                        "metadata only"
-                    )
+                if _stored_processing_attempts(article["id"]) >= 1:
+                    print("Article content unavailable after retry; using title/URL metadata only")
 
-                    content = (
-                        _metadata_only_classification_content(
-                            article
-                        )
-                    )
+                    content = _metadata_only_classification_content(article)
 
                 else:
-                    print(
-                        "Content unavailable. "
-                        "No usable RSS excerpt."
-                    )
+                    print("Content unavailable. No usable RSS excerpt.")
 
                     _record_failure(
                         article_id=article["id"],
@@ -230,16 +164,9 @@ def _process_article(
 
                     return False
 
-        classification_content = (
-            _prepare_classification_content(
-                content
-            )
-        )
+        classification_content = _prepare_classification_content(content)
 
-        if (
-            len(classification_content)
-            < len(content)
-        ):
+        if len(classification_content) < len(content):
             print(
                 "Classification content truncated: "
                 f"{len(content)} -> "
@@ -253,32 +180,15 @@ def _process_article(
         )
 
         relevance_score = calculate_relevance_score(
-            feature_strengths=(
-                classification[
-                    "feature_strengths"
-                ]
-            ),
+            feature_strengths=(classification["feature_strengths"]),
             profile=profile,
-            importance=(
-                classification[
-                    "importance"
-                ]
-            ),
+            importance=(classification["importance"]),
         )
 
         result = {
-            "relevance_score":
-                relevance_score,
-
-            "why_interesting":
-                classification[
-                    "why_interesting"
-                ],
-
-            "topics":
-                classification[
-                    "topics"
-                ],
+            "relevance_score": relevance_score,
+            "why_interesting": classification["why_interesting"],
+            "topics": classification["topics"],
         }
 
         save_classification(
@@ -286,24 +196,14 @@ def _process_article(
             result=result,
         )
 
-        print(
-            f"Score: "
-            f"{relevance_score}"
-        )
+        print(f"Score: {relevance_score}")
 
-        print(
-            f"Importance: "
-            f"{classification['importance']}"
-        )
+        print(f"Importance: {classification['importance']}")
 
         _print_match_summary(
-            feature_strengths=classification[
-                "feature_strengths"
-            ],
+            feature_strengths=classification["feature_strengths"],
             profile=profile,
-            why_interesting=classification[
-                "why_interesting"
-            ],
+            why_interesting=classification["why_interesting"],
         )
 
         return True
@@ -311,9 +211,7 @@ def _process_article(
     except Exception as error:
         message = _sanitize_error(error)
 
-        print(
-            f"Processing failed: {message}"
-        )
+        print(f"Processing failed: {message}")
 
         _record_failure(
             article_id=article["id"],
@@ -330,9 +228,7 @@ def process_articles(articles) -> dict:
             "failed": 0,
         }
 
-    with open(
-        "config/interests.yaml"
-    ) as file:
+    with open("config/interests.yaml") as file:
         profile = yaml.safe_load(file)
 
     processed = 0

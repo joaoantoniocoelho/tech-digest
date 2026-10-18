@@ -22,17 +22,12 @@ def x_share_url(text: str, url: str) -> str:
 
 
 def linkedin_share_url(url: str) -> str:
-    return (
-        "https://www.linkedin.com/sharing/share-offsite/?"
-        + urlencode({"url": url})
-    )
+    return "https://www.linkedin.com/sharing/share-offsite/?" + urlencode({"url": url})
 
 
 def share_links(date: str, text: str) -> dict[str, str]:
     return {
         "link": edition_url(date, SHARE_REFS["link"]),
         "x": x_share_url(text, edition_url(date, SHARE_REFS["x"])),
-        "linkedin": linkedin_share_url(
-            edition_url(date, SHARE_REFS["linkedin"])
-        ),
+        "linkedin": linkedin_share_url(edition_url(date, SHARE_REFS["linkedin"])),
     }

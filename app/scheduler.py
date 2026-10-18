@@ -6,17 +6,13 @@ from app.db import get_connection, init_db
 from app.log import log_event, redact_text
 from app.pipeline import run_job_blocking
 
-
 TIMEZONE_NAME = "America/Sao_Paulo"
 ZONE = ZoneInfo(TIMEZONE_NAME)
 TICK_SECONDS = 20
 
 # (job, hour, minute, grace)
 _RULES = [
-    *[
-        ("collect", hour, 0, timedelta(minutes=30))
-        for hour in range(0, 24, 4)
-    ],
+    *[("collect", hour, 0, timedelta(minutes=30)) for hour in range(0, 24, 4)],
     ("collect", 6, 45, timedelta(minutes=30)),
     ("process", 6, 50, timedelta(hours=3)),
     ("send", 7, 0, timedelta(hours=3)),
@@ -91,7 +87,7 @@ def record_slot(slot: str, job: str, status: str) -> None:
 class Scheduler:
     def __init__(self, tick_seconds: float = TICK_SECONDS):
         self._stop = threading.Event()
-        self._thread = None
+        self._thread: threading.Thread | None = None
         self._tick_seconds = tick_seconds
 
     def start(self) -> None:
@@ -117,9 +113,7 @@ class Scheduler:
             except Exception as error:
                 log_event(
                     "scheduler_error",
-                    error=redact_text(
-                        f"{type(error).__name__}: {error}"
-                    ),
+                    error=redact_text(f"{type(error).__name__}: {error}"),
                 )
             self._stop.wait(self._tick_seconds)
 

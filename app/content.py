@@ -1,7 +1,6 @@
 import httpx
 from trafilatura import extract
 
-
 ARTICLE_TIMEOUT_SECONDS = 15.0
 
 

@@ -69,16 +69,16 @@ class DuplicateStoryTestCase(unittest.TestCase):
 
     @patch("app.classifier._get_client")
     def test_invalid_jev_response_stops_selection(self, get_client):
-        get_client.return_value.system_one.return_value = SimpleNamespace(
-            scores={}
-        )
+        get_client.return_value.system_one.return_value = SimpleNamespace(scores={})
 
-        with patch.dict(os.environ, {"TYPESAFE_API_KEY": "test-key"}):
-            with self.assertRaisesRegex(ValueError, "duplicate score"):
-                is_duplicate_story(
-                    _article("Another story"),
-                    [_article("A story")],
-                )
+        with (
+            patch.dict(os.environ, {"TYPESAFE_API_KEY": "test-key"}),
+            self.assertRaisesRegex(ValueError, "duplicate score"),
+        ):
+            is_duplicate_story(
+                _article("Another story"),
+                [_article("A story")],
+            )
 
 
 class DigestSelectionTestCase(unittest.TestCase):
@@ -162,33 +162,38 @@ class DiversitySelectionTestCase(unittest.TestCase):
     }
 
     def _build(self, candidates, config=None):
-        with patch("app.digest.init_db"), patch(
-            "app.digest.load_digest_config",
-            return_value=config or self.CONFIG,
-        ), patch(
-            "app.digest.get_digest_candidates",
-            return_value=candidates,
-        ), patch(
-            "app.digest.load_topic_groups",
-            return_value=self.GROUPS,
-        ), patch(
-            "app.digest.is_duplicate_story",
-            return_value=False,
+        with (
+            patch("app.digest.init_db"),
+            patch(
+                "app.digest.load_digest_config",
+                return_value=config or self.CONFIG,
+            ),
+            patch(
+                "app.digest.get_digest_candidates",
+                return_value=candidates,
+            ),
+            patch(
+                "app.digest.load_topic_groups",
+                return_value=self.GROUPS,
+            ),
+            patch(
+                "app.digest.is_duplicate_story",
+                return_value=False,
+            ),
         ):
-            return [
-                article["title"]
-                for article in build_digest()["articles"]
-            ]
+            return [article["title"] for article in build_digest()["articles"]]
 
     def test_extra_items_from_a_full_group_rank_lower(self):
-        titles = self._build([
-            _article("AI 1", 90, topics=["AI models"]),
-            _article("AI 2", 88, topics=["AI agents"]),
-            _article("AI 3", 86, topics=["AI models", "Security"]),
-            _article("AI 4", 84, topics=["AI agents"]),
-            _article("Security", 75, topics=["Security"]),
-            _article("Engineering", 70, topics=["Software engineering"]),
-        ])
+        titles = self._build(
+            [
+                _article("AI 1", 90, topics=["AI models"]),
+                _article("AI 2", 88, topics=["AI agents"]),
+                _article("AI 3", 86, topics=["AI models", "Security"]),
+                _article("AI 4", 84, topics=["AI agents"]),
+                _article("Security", 75, topics=["Security"]),
+                _article("Engineering", 70, topics=["Software engineering"]),
+            ]
+        )
 
         self.assertEqual(
             titles,
@@ -196,22 +201,26 @@ class DiversitySelectionTestCase(unittest.TestCase):
         )
 
     def test_strong_items_still_win_over_much_weaker_ones(self):
-        titles = self._build([
-            _article("AI 1", 95, topics=["AI models"]),
-            _article("AI 2", 94, topics=["AI models"]),
-            _article("AI 3", 93, topics=["AI models"]),
-            _article("AI 4", 92, topics=["AI models"]),
-            _article("Security", 61, topics=["Security"]),
-        ])
+        titles = self._build(
+            [
+                _article("AI 1", 95, topics=["AI models"]),
+                _article("AI 2", 94, topics=["AI models"]),
+                _article("AI 3", 93, topics=["AI models"]),
+                _article("AI 4", 92, topics=["AI models"]),
+                _article("Security", 61, topics=["Security"]),
+            ]
+        )
 
         self.assertEqual(titles, ["AI 1", "AI 2", "AI 3", "AI 4"])
 
     def test_diversity_never_adds_articles_below_the_candidates(self):
-        titles = self._build([
-            _article("AI 1", 90, topics=["AI models"]),
-            _article("AI 2", 88, topics=["AI models"]),
-            _article("AI 3", 86, topics=["AI models"]),
-        ])
+        titles = self._build(
+            [
+                _article("AI 1", 90, topics=["AI models"]),
+                _article("AI 2", 88, topics=["AI models"]),
+                _article("AI 3", 86, topics=["AI models"]),
+            ]
+        )
 
         self.assertEqual(titles, ["AI 1", "AI 2", "AI 3"])
 
@@ -232,9 +241,9 @@ class DiversitySelectionTestCase(unittest.TestCase):
         self.assertEqual(titles, ["AI 1", "AI 2", "AI 3", "Security"])
 
     def test_every_positive_feature_has_a_known_group(self):
-        from app.digest import INTERESTS_PATH
-
         import yaml
+
+        from app.digest import INTERESTS_PATH
 
         with INTERESTS_PATH.open() as file:
             features = yaml.safe_load(file)["features"]
@@ -250,30 +259,34 @@ class DiversitySelectionTestCase(unittest.TestCase):
 
 class CandidateQueryTestCase(unittest.TestCase):
     def test_can_fetch_beyond_digest_limit_for_replacements(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(db, "DB_PATH", Path(tmp) / "digest.db"):
-                db.init_db()
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(db, "DB_PATH", Path(tmp) / "digest.db"),
+        ):
+            db.init_db()
 
-                for score in (90, 80, 70):
-                    url = f"https://example.com/{score}"
-                    db.save_article({
+            for score in (90, 80, 70):
+                url = f"https://example.com/{score}"
+                db.save_article(
+                    {
                         "source": "Example",
                         "title": f"Story {score}",
                         "url": url,
                         "published_at": datetime.now(timezone.utc).isoformat(),
                         "feed_excerpt": f"Excerpt {score}",
-                    })
-                    db.save_classification(
-                        db.get_article_by_url(url)["id"],
-                        {
-                            "relevance_score": score,
-                            "why_interesting": "",
-                            "topics": [],
-                        },
-                    )
+                    }
+                )
+                db.save_classification(
+                    db.get_article_by_url(url)["id"],
+                    {
+                        "relevance_score": score,
+                        "why_interesting": "",
+                        "topics": [],
+                    },
+                )
 
-                all_candidates = db.get_digest_candidates(24, 60)
-                limited = db.get_digest_candidates(24, 60, 2)
+            all_candidates = db.get_digest_candidates(24, 60)
+            limited = db.get_digest_candidates(24, 60, 2)
 
         self.assertEqual(
             [item["relevance_score"] for item in all_candidates],

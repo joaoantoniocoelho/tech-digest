@@ -46,19 +46,11 @@ def get_connection():
         timeout=30,
     )
 
-    connection.row_factory = (
-        sqlite3.Row
-    )
+    connection.row_factory = sqlite3.Row
 
-    connection.execute(
-        "PRAGMA journal_mode=WAL"
-    )
-    connection.execute(
-        "PRAGMA busy_timeout=30000"
-    )
-    connection.execute(
-        "PRAGMA foreign_keys=ON"
-    )
+    connection.execute("PRAGMA journal_mode=WAL")
+    connection.execute("PRAGMA busy_timeout=30000")
+    connection.execute("PRAGMA foreign_keys=ON")
     connection.commit()
 
     try:
@@ -95,53 +87,29 @@ def init_db():
             """
         )
 
-        columns = {
-            row["name"]
-            for row in connection.execute(
-                "PRAGMA table_info(articles)"
-            )
-        }
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(articles)")}
 
         migrations = {
-            "relevance_score":
-                "ALTER TABLE articles ADD COLUMN relevance_score INTEGER",
-
-            "why_interesting":
-                "ALTER TABLE articles ADD COLUMN why_interesting TEXT",
-
-            "topics":
-                "ALTER TABLE articles ADD COLUMN topics TEXT",
-
-            "processed_at":
-                "ALTER TABLE articles ADD COLUMN processed_at TEXT",
-
-            "feed_excerpt":
-                "ALTER TABLE articles ADD COLUMN feed_excerpt TEXT",
-
-            "processing_attempts":
-                """
+            "relevance_score": "ALTER TABLE articles ADD COLUMN relevance_score INTEGER",
+            "why_interesting": "ALTER TABLE articles ADD COLUMN why_interesting TEXT",
+            "topics": "ALTER TABLE articles ADD COLUMN topics TEXT",
+            "processed_at": "ALTER TABLE articles ADD COLUMN processed_at TEXT",
+            "feed_excerpt": "ALTER TABLE articles ADD COLUMN feed_excerpt TEXT",
+            "processing_attempts": """
                 ALTER TABLE articles
                 ADD COLUMN processing_attempts INTEGER NOT NULL DEFAULT 0
                 """,
-
-            "last_processing_error":
-                """
+            "last_processing_error": """
                 ALTER TABLE articles
                 ADD COLUMN last_processing_error TEXT
                 """,
-
-            "failed_at":
-                "ALTER TABLE articles ADD COLUMN failed_at TEXT",
-
-            "delivered_at":
-                "ALTER TABLE articles ADD COLUMN delivered_at TEXT",
+            "failed_at": "ALTER TABLE articles ADD COLUMN failed_at TEXT",
+            "delivered_at": "ALTER TABLE articles ADD COLUMN delivered_at TEXT",
         }
 
         for column, migration in migrations.items():
             if column not in columns:
-                connection.execute(
-                    migration
-                )
+                connection.execute(migration)
 
         connection.execute(
             """
@@ -163,17 +131,12 @@ def init_db():
         )
 
         subscriber_columns = {
-            row["name"]
-            for row in connection.execute(
-                "PRAGMA table_info(subscribers)"
-            )
+            row["name"] for row in connection.execute("PRAGMA table_info(subscribers)")
         }
 
         for column in ("created_at", *SUBSCRIBER_ATTRIBUTION_COLUMNS):
             if column not in subscriber_columns:
-                connection.execute(
-                    f"ALTER TABLE subscribers ADD COLUMN {column} TEXT"
-                )
+                connection.execute(f"ALTER TABLE subscribers ADD COLUMN {column} TEXT")
 
         # Rows from before created_at existed: subscribed_at is the best
         # available signup date, although a past reactivation may have reset it.
@@ -227,17 +190,13 @@ def save_article(article: dict) -> bool:
                 article["title"],
                 article["url"],
                 article["published_at"],
-                article.get(
-                    "feed_excerpt"
-                ),
+                article.get("feed_excerpt"),
             ),
         )
 
         is_new = cursor.rowcount == 1
 
-        feed_excerpt = article.get(
-            "feed_excerpt"
-        )
+        feed_excerpt = article.get("feed_excerpt")
 
         if feed_excerpt:
             connection.execute(
@@ -276,30 +235,20 @@ def _parse_article_datetime(
         )
 
         if parsed.tzinfo is None:
-            parsed = parsed.replace(
-                tzinfo=timezone.utc
-            )
+            parsed = parsed.replace(tzinfo=timezone.utc)
 
-        return parsed.astimezone(
-            timezone.utc
-        )
+        return parsed.astimezone(timezone.utc)
 
     except ValueError:
         pass
 
     try:
-        parsed = parsedate_to_datetime(
-            value
-        )
+        parsed = parsedate_to_datetime(value)
 
         if parsed.tzinfo is None:
-            parsed = parsed.replace(
-                tzinfo=timezone.utc
-            )
+            parsed = parsed.replace(tzinfo=timezone.utc)
 
-        return parsed.astimezone(
-            timezone.utc
-        )
+        return parsed.astimezone(timezone.utc)
 
     except (
         TypeError,
@@ -313,25 +262,13 @@ def article_datetime(
     published_at: str | None,
     discovered_at: str | None,
 ):
-    return (
-        _parse_article_datetime(
-            published_at
-        )
-        or _parse_article_datetime(
-            discovered_at
-        )
-    )
+    return _parse_article_datetime(published_at) or _parse_article_datetime(discovered_at)
 
 
 def get_articles_for_daily_processing(
     lookback_hours: int,
 ):
-    cutoff = (
-        datetime.now(timezone.utc)
-        - timedelta(
-            hours=lookback_hours
-        )
-    )
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
 
     with get_connection() as connection:
         rows = connection.execute(
@@ -354,18 +291,13 @@ def get_articles_for_daily_processing(
     articles = []
 
     for row in rows:
-        attempts = row[
-            "processing_attempts"
-        ]
+        attempts = row["processing_attempts"]
         published_time = article_datetime(
             row["published_at"],
             row["discovered_at"],
         )
 
-        in_window = (
-            published_time is not None
-            and published_time >= cutoff
-        )
+        in_window = published_time is not None and published_time >= cutoff
         in_flight_retry = attempts > 0
 
         if not in_window and not in_flight_retry:
@@ -377,30 +309,17 @@ def get_articles_for_daily_processing(
                 "source": row["source"],
                 "title": row["title"],
                 "url": row["url"],
-                "published_at": row[
-                    "published_at"
-                ],
-                "discovered_at": row[
-                    "discovered_at"
-                ],
-                "feed_excerpt": row[
-                    "feed_excerpt"
-                ],
-                "processing_attempts": (
-                    attempts
-                ),
-                "article_datetime": (
-                    published_time
-                ),
+                "published_at": row["published_at"],
+                "discovered_at": row["discovered_at"],
+                "feed_excerpt": row["feed_excerpt"],
+                "processing_attempts": (attempts),
+                "article_datetime": (published_time),
             }
         )
 
     articles.sort(
         key=lambda article: (
-            article["article_datetime"]
-            or datetime.min.replace(
-                tzinfo=timezone.utc
-            ),
+            article["article_datetime"] or datetime.min.replace(tzinfo=timezone.utc),
             article["id"],
         )
     )
@@ -420,9 +339,7 @@ def _article_from_row(row):
         "published_at": row["published_at"],
         "discovered_at": row["discovered_at"],
         "feed_excerpt": row["feed_excerpt"],
-        "processing_attempts": row[
-            "processing_attempts"
-        ],
+        "processing_attempts": row["processing_attempts"],
     }
 
 
@@ -487,12 +404,8 @@ def save_classification(
             WHERE id = ?
             """,
             (
-                result[
-                    "relevance_score"
-                ],
-                result[
-                    "why_interesting"
-                ],
+                result["relevance_score"],
+                result["why_interesting"],
                 json.dumps(
                     result["topics"],
                     ensure_ascii=False,
@@ -535,14 +448,9 @@ def record_processing_error(
         ).fetchone()
 
         if (
-            fail_after_attempts
-            is not None
-            and row[
-                "processing_attempts"
-            ]
-            >= fail_after_attempts
-            and row["failed_at"]
-            is None
+            fail_after_attempts is not None
+            and row["processing_attempts"] >= fail_after_attempts
+            and row["failed_at"] is None
         ):
             connection.execute(
                 """
@@ -572,12 +480,7 @@ def get_digest_candidates(
     minimum_score: int,
     maximum_articles: int | None = None,
 ):
-    cutoff = (
-        datetime.now(timezone.utc)
-        - timedelta(
-            hours=lookback_hours
-        )
-    )
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
 
     with get_connection() as connection:
         rows = connection.execute(
@@ -605,9 +508,7 @@ def get_digest_candidates(
                 discovered_at DESC,
                 id DESC
             """,
-            (
-                minimum_score,
-            ),
+            (minimum_score,),
         ).fetchall()
 
     articles = []
@@ -618,19 +519,14 @@ def get_digest_candidates(
             row["discovered_at"],
         )
 
-        if (
-            candidate_datetime is None
-            or candidate_datetime < cutoff
-        ):
+        if candidate_datetime is None or candidate_datetime < cutoff:
             continue
 
         topics = []
 
         if row["topics"]:
             try:
-                topics = json.loads(
-                    row["topics"]
-                )
+                topics = json.loads(row["topics"])
             except json.JSONDecodeError:
                 topics = []
 
@@ -640,43 +536,18 @@ def get_digest_candidates(
                 "source": row["source"],
                 "title": row["title"],
                 "url": row["url"],
-                "published_at": (
-                    row["published_at"]
-                ),
+                "published_at": (row["published_at"]),
                 "feed_excerpt": row["feed_excerpt"],
-                "relevance_score": (
-                    row[
-                        "relevance_score"
-                    ]
-                ),
-                "why_interesting": (
-                    row[
-                        "why_interesting"
-                    ]
-                ),
+                "relevance_score": (row["relevance_score"]),
+                "why_interesting": (row["why_interesting"]),
                 "topics": topics,
-                "discovered_at": (
-                    row[
-                        "discovered_at"
-                    ]
-                ),
-                "processed_at": (
-                    row[
-                        "processed_at"
-                    ]
-                ),
-                "delivered_at": (
-                    row[
-                        "delivered_at"
-                    ]
-                ),
+                "discovered_at": (row["discovered_at"]),
+                "processed_at": (row["processed_at"]),
+                "delivered_at": (row["delivered_at"]),
             }
         )
 
-        if (
-            maximum_articles is not None
-            and len(articles) >= maximum_articles
-        ):
+        if maximum_articles is not None and len(articles) >= maximum_articles:
             break
 
     return articles
@@ -689,15 +560,14 @@ def mark_articles_delivered(
     if not article_ids:
         return
 
-    placeholders = ",".join(
-        "?"
-        for _ in article_ids
-    )
+    placeholders = ",".join("?" for _ in article_ids)
     # Same UTC format as CURRENT_TIMESTAMP, so string MAX() and date() keep
     # working; an explicit send time keeps the edition date the email links to.
     timestamp = (
-        delivered_at or datetime.now(timezone.utc)
-    ).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        (delivered_at or datetime.now(timezone.utc))
+        .astimezone(timezone.utc)
+        .strftime("%Y-%m-%d %H:%M:%S")
+    )
 
     with get_connection() as connection:
         connection.execute(
@@ -762,16 +632,12 @@ def get_latest_edition() -> dict | None:
         )
 
     return {
-        "delivered_at": _parse_article_datetime(
-            rows[0]["delivered_at"]
-        ),
+        "delivered_at": _parse_article_datetime(rows[0]["delivered_at"]),
         "articles": articles,
     }
 
 
-def list_public_editions(
-    limit: int, offset: int = 0
-) -> list[dict[str, str | int]]:
+def list_public_editions(limit: int, offset: int = 0) -> list[dict[str, str | int]]:
     with get_connection() as connection:
         rows = connection.execute(
             """
@@ -786,10 +652,7 @@ def list_public_editions(
             (limit, offset),
         ).fetchall()
 
-    return [
-        {"date": row["edition_date"], "article_count": row["article_count"]}
-        for row in rows
-    ]
+    return [{"date": row["edition_date"], "article_count": row["article_count"]} for row in rows]
 
 
 def get_public_edition(edition_date: str) -> dict | None:

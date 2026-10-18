@@ -23,9 +23,8 @@ class TemporaryDbTestCase(unittest.TestCase):
     initialize_db = True
 
     def setUp(self):
-        temporary = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        temporary.close()
-        self.db_path = Path(temporary.name)
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temporary:
+            self.db_path = Path(temporary.name)
         self.db_patcher = patch.object(db, "DB_PATH", self.db_path)
         self.db_patcher.start()
         if self.initialize_db:
@@ -89,9 +88,7 @@ class SubscriberStoreTestCase(TemporaryDbTestCase):
         self.assertEqual(again["subscribed_at"], original["subscribed_at"])
         self.assertEqual(again["status"], "active")
         with db.get_connection() as connection:
-            count = connection.execute(
-                "SELECT COUNT(*) FROM subscribers"
-            ).fetchone()[0]
+            count = connection.execute("SELECT COUNT(*) FROM subscribers").fetchone()[0]
         self.assertEqual(count, 1)
 
     def test_unsubscribe_and_resubscribe(self):
@@ -126,9 +123,7 @@ class SubscriberStoreTestCase(TemporaryDbTestCase):
                 with self.assertRaises(ValueError):
                     subscribe_email(value)
         with db.get_connection() as connection:
-            count = connection.execute(
-                "SELECT COUNT(*) FROM subscribers"
-            ).fetchone()[0]
+            count = connection.execute("SELECT COUNT(*) FROM subscribers").fetchone()[0]
         self.assertEqual(count, 0)
 
 
@@ -241,9 +236,7 @@ class SubscriberAttributionTestCase(TemporaryDbTestCase):
         self.assertNotEqual(self._row()["subscribed_at"], original)
 
     def test_normalize_attribution_drops_lone_surrogates(self):
-        attribution = normalize_attribution(
-            {"utm_source": "a\ud800b", "acquisition_url": "\udfff"}
-        )
+        attribution = normalize_attribution({"utm_source": "a\ud800b", "acquisition_url": "\udfff"})
         self.assertEqual(attribution.utm_source, "ab")
         self.assertIsNone(attribution.acquisition_url)
         subscribe_email("reader@example.com", attribution)
@@ -317,17 +310,12 @@ class SubscriberMigrationTestCase(TemporaryDbTestCase):
 
         db.init_db()
         with db.get_connection() as connection:
-            connection.execute(
-                "UPDATE subscribers SET subscribed_at = '2026-12-01T00:00:00+00:00'"
-            )
+            connection.execute("UPDATE subscribers SET subscribed_at = '2026-12-01T00:00:00+00:00'")
         # A second run must not re-backfill rows that already have created_at.
         db.init_db()
 
         with db.get_connection() as connection:
-            columns = {
-                row["name"]
-                for row in connection.execute("PRAGMA table_info(subscribers)")
-            }
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(subscribers)")}
             legacy = connection.execute(
                 "SELECT * FROM subscribers WHERE email = 'legacy@example.com'"
             ).fetchone()
