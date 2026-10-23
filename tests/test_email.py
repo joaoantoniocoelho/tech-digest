@@ -56,111 +56,74 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
         )
 
         for color in (
-            "#f4f4f5",
+            "#f5f5f7",
             "#ffffff",
-            "#18181b",
-            "#3f3f46",
-            "#52525b",
-            "#a1a1aa",
-            "#1f6a88",
-            "#64a9ca",
+            "#1d1d1f",
+            "#424245",
+            "#6e6e73",
+            "#86868b",
+            "#e5e5ea",
         ):
             self.assertIn(color, html)
-        self.assertIn("background-color:#f4f4f5", html)
-        self.assertIn('bgcolor="#f4f4f5"', html)
+        for old_color in ("#f4f4f5", "#18181b", "#1f6a88", "#64a9ca"):
+            self.assertNotIn(old_color, html)
+        self.assertIn('bgcolor="#f5f5f7"', html)
         self.assertIn('bgcolor="#ffffff"', html)
-        dark_css = html.split(
-            "@media (prefers-color-scheme: dark)",
-            1,
-        )[1]
-        self.assertIn(
-            "background-color:#000000 !important",
-            dark_css,
-        )
-        self.assertIn(
-            "background-color:#18181b !important",
-            dark_css,
-        )
-        self.assertIn("color:#7dd3fc !important", dark_css)
-        self.assertIn("color:#f4f4f5 !important", dark_css)
-        body = html.split("<body", 1)[1]
-        self.assertIn("background-color:#f4f4f5", body)
-        self.assertNotIn("background-color:#000000", body)
+        self.assertIn("border-radius:24px", html)
         self.assertIn("Helvetica Neue", html)
         self.assertNotIn("Georgia", html)
         self.assertNotIn("fonts.googleapis.com", html)
-        self.assertNotIn("border-radius:", html)
-        self.assertNotIn("mix-blend-mode", html)
-        self.assertIn("João Coelho Tech Digest", html)
-        self.assertIn("TECH DIGEST", html)
-        self.assertIn("SEP 22", html)
-        self.assertIn("Curated by João Coelho", html)
-        self.assertIn("Tuesday, September 22, 2026", html)
+        self.assertIn(">tech digest</p>", html)
+        self.assertIn(">today&#x27;s edition</h1>", html)
         self.assertIn(
-            "1 selected story from the last 24 hours",
+            "tuesday, september 22, 2026 · 1 article from the last 24 hours",
             html,
         )
-        self.assertIn("Technology worth your time.", html)
-        self.assertIn("Tom &amp; Jerry", html)
-        self.assertIn("&lt;script&gt;", html)
-        self.assertIn("&gt;</span>", html)
-        self.assertNotIn("&#8599;", html)
-        self.assertNotIn(">Tech Digest</p>", html)
+        self.assertIn('bgcolor="#1d1d1f"', html)
+        self.assertIn(">sep 22</td>", html)
+        self.assertIn(">01</td>", html)
+        self.assertIn("border-top:1px solid #e5e5ea;border-bottom:1px solid #e5e5ea;", html)
+        self.assertIn("tech digest, by joão coelho", html)
+        self.assertIn("Tom &amp; Jerry &lt;script&gt;", html)
         self.assertNotIn("<script>", html)
         self.assertIn(
-            "https://example.com/a?b=1&amp;c=2",
+            'href="https://example.com/a?b=1&amp;c=2"',
             html,
         )
-        self.assertIn("Example Feed", html)
-        self.assertIn("Compiler design", html)
-        self.assertIn("Score 87", html)
-        self.assertIn("AI agents · Developer tools", html)
-        self.assertNotIn(">Why<", html)
-        self.assertNotIn("Read article", html)
-        self.assertNotIn(">01<", html)
-        self.assertIn("Sep 22", html)
+        self.assertIn(
+            "Example Feed · sep 22 · ai agents · developer tools · compiler design · score 87",
+            html,
+        )
         self.assertIn('href="https://x.com/joaoac_"', html)
         self.assertIn('href="https://joaoac.com"', html)
-        self.assertNotIn("Unsubscribe", html)
+        self.assertNotIn("unsubscribe", html)
 
-    def test_theme_follows_client_color_scheme(self):
+    def test_light_only_without_dark_styles(self):
+        html = render_html_digest(digest=_digest(), sent_at=SENT_AT)
+
+        self.assertIn('name="color-scheme" content="light"', html)
+        self.assertIn('name="supported-color-schemes" content="light"', html)
+        self.assertNotIn("prefers-color-scheme", html)
+        self.assertNotIn("light dark", html)
+
+    def test_copy_is_lowercase(self):
         html = render_html_digest(
             digest=_digest(),
-            show_score=True,
-            show_topics=True,
             sent_at=SENT_AT,
+            unsubscribe_url="https://digest.joaoac.com/unsubscribe/tok",
         )
 
-        self.assertIn(
-            'name="color-scheme" content="light dark"',
-            html,
-        )
-        self.assertIn(
-            'name="supported-color-schemes" content="light dark"',
-            html,
-        )
-        self.assertIn(
-            "color-scheme: light dark",
-            html,
-        )
-        self.assertIn(
-            ".canvas { background-color:#000000 !important; }",
-            html,
-        )
-        self.assertIn(
-            ".paper { background-color:#18181b !important; }",
-            html,
-        )
-        self.assertIn(
-            ".ink { color:#f4f4f5 !important; }",
-            html,
-        )
-        self.assertIn(
-            ".accent { color:#7dd3fc !important; }",
-            html,
-        )
-        self.assertNotIn("mix-blend-mode", html)
-        self.assertNotIn("gmail-blend", html)
+        for label in (
+            ">share this digest</p>",
+            "know someone who would like this edition? send it their way.",
+            ">link to this edition</a>",
+            ">linkedin</a>",
+            ">website</a>",
+            ">unsubscribe</a>",
+        ):
+            self.assertIn(label, html)
+        for old_label in ("TECH DIGEST", "Curated by", "Share this digest", "Unsubscribe"):
+            self.assertNotIn(old_label, html)
 
     def test_hides_score_topics_and_empty_why(self):
         digest = _digest()
@@ -188,11 +151,10 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
         self.assertNotIn("Compiler design", html)
         self.assertNotIn("Databases", html)
         self.assertNotIn(">Why<", html)
-        self.assertIn(
-            "2 selected stories from the last 24 hours",
-            html,
-        )
+        self.assertIn("2 articles from the last 24 hours", html)
+        self.assertIn("Example Feed · sep 22</p>", html)
         self.assertIn(">Second</h2>", html)
+        self.assertIn(">02</td>", html)
         self.assertNotIn(">Second</a>", html)
 
     def test_subject_uses_send_date(self):
@@ -206,7 +168,7 @@ class ShareDigestTestCase(unittest.TestCase):
     def test_html_links_to_utc_edition_with_refs(self):
         html = render_html_digest(digest=_digest(), sent_at=SENT_AT)
 
-        self.assertIn("Share this digest", html)
+        self.assertIn("share this digest", html)
         edition = "https://digest.joaoac.com/digest/2026-09-22"
         self.assertIn(f'href="{edition}?ref=share"', html)
         self.assertIn(
@@ -243,15 +205,15 @@ class ShareDigestTestCase(unittest.TestCase):
             sent_at=SENT_AT,
         )
 
-        self.assertNotIn("Share this digest", html)
+        self.assertNotIn("share this digest", html)
 
     def test_text_lists_share_links(self):
         text = render_text_digest(digest=_digest(), sent_at=SENT_AT)
 
         self.assertIn(
-            "Share this digest\n"
-            "Know someone who would like this edition? Send it their way.\n"
-            "Link to this edition: "
+            "share this digest\n"
+            "know someone who would like this edition? send it their way.\n"
+            "link to this edition: "
             "https://digest.joaoac.com/digest/2026-09-22?ref=share\n"
             "X: https://x.com/intent/post?text=Tech+Digest",
             text,
@@ -264,7 +226,7 @@ class ShareDigestTestCase(unittest.TestCase):
         )
 
     def test_text_without_send_time_has_no_share_block(self):
-        self.assertNotIn("Share this digest", render_text_digest(digest=_digest()))
+        self.assertNotIn("share this digest", render_text_digest(digest=_digest()))
 
 
 class SendEmailTestCase(unittest.TestCase):
@@ -463,7 +425,7 @@ class SendDailyDigestTestCase(unittest.TestCase):
         self.assertEqual(kwargs["to"], ["reader@example.com"])
         self.assertTrue(kwargs["subject"].startswith("João Coelho Tech Digest — "))
         self.assertIn("Example", kwargs["html_body"])
-        self.assertIn("João Coelho", kwargs["html_body"])
+        self.assertIn("joão coelho", kwargs["html_body"])
         self.assertIn(
             "https://api.digest.joaoac.com/unsubscribe/token-reader-1",
             kwargs["html_body"],
@@ -485,7 +447,7 @@ class SendDailyDigestTestCase(unittest.TestCase):
         )
         self.assertIn(edition + "?ref=share", kwargs["html_body"])
         self.assertIn(
-            f"Link to this edition: {edition}?ref=share",
+            f"link to this edition: {edition}?ref=share",
             kwargs["text"],
         )
         revalidate.assert_called_once_with()

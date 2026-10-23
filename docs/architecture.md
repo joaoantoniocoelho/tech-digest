@@ -316,7 +316,7 @@ The digest selects recent classified articles that:
 - stay under the article cap (`maximum_articles: 8`);
 - have not already been delivered.
 
-Each item is a compact Why line of at most three positive feature labels. Scores and topic lists are hidden in the email by default (`show_score` / `show_topics` in `config/digest.yaml`).
+The HTML email mirrors the sample on digest.joaoac.com: same colors, lowercase copy, light only, numbered list with each article's source, date and Why labels on one line. Scores and topic lists are hidden in the email by default (`show_score` / `show_topics` in `config/digest.yaml`).
 
 Delivery goes through Resend (`digest.joaoac.com`). The digest is built once, then sent separately to each active subscriber with that subscriber's unsubscribe link. Articles are marked delivered when at least one send succeeds. `send_digest` does not call Telegram.
 

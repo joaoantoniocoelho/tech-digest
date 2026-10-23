@@ -112,29 +112,32 @@ class RenderWelcomeTestCase(unittest.TestCase):
             unsubscribe_url="https://digest.joaoac.com/unsubscribe/tok",
         )
 
-        self.assertIn("Welcome to Tech Digest.", html)
-        self.assertIn("Thanks for subscribing.", html)
+        self.assertIn(">welcome to tech digest</h1>", html)
+        self.assertIn("thanks for subscribing.", html)
         self.assertIn("here is the latest edition", html)
-        self.assertIn("Latest edition · Thursday, September 24, 2026", html)
-        self.assertIn("2 selected stories from the last 24 hours", html)
+        self.assertIn(
+            "latest edition · thursday, september 24, 2026 · 2 articles from the last 24 hours",
+            html,
+        )
+        self.assertIn(">02</td>", html)
         self.assertIn("Tom &amp; Jerry &lt;script&gt;", html)
         self.assertNotIn("<script>", html)
         self.assertIn("https://example.com/a?b=1&amp;c=2", html)
         self.assertIn("Second story", html)
-        self.assertIn(">WELCOME<", html)
+        self.assertIn(">welcome</td>", html)
         self.assertIn(
             'href="https://digest.joaoac.com/unsubscribe/tok"',
             html,
         )
-        self.assertIn("prefers-color-scheme: dark", html)
+        self.assertNotIn("prefers-color-scheme", html)
 
     def test_html_without_edition(self):
         html = render_html_welcome(edition=None, sent_at=SENT_AT)
 
-        self.assertIn("Welcome to Tech Digest.", html)
-        self.assertIn("Your first edition arrives with the next morning send.", html)
-        self.assertNotIn("Latest edition", html)
-        self.assertNotIn("Unsubscribe", html)
+        self.assertIn(">welcome to tech digest</h1>", html)
+        self.assertIn("your first edition arrives with the next morning send.", html)
+        self.assertNotIn("latest edition", html)
+        self.assertNotIn("unsubscribe", html)
 
     def test_text_includes_latest_edition(self):
         text = render_text_welcome(
@@ -156,7 +159,7 @@ class RenderWelcomeTestCase(unittest.TestCase):
             unsubscribe_url="https://digest.joaoac.com/unsubscribe/tok",
         )
 
-        self.assertIn("Your first edition arrives with the next morning send.", text)
+        self.assertIn("your first edition arrives with the next morning send.", text)
         self.assertIn("Unsubscribe: https://digest.joaoac.com/unsubscribe/tok", text)
 
 

@@ -306,7 +306,7 @@ class HtmlPreviewTestCase(unittest.TestCase):
 
             html = path.read_text(encoding="utf-8")
 
-        self.assertIn("TECH DIGEST", html)
+        self.assertIn(">tech digest</p>", html)
         self.assertIn("Formal methods with Hillel Wayne", html)
         self.assertIn("The last six months in LLMs, in five minutes", html)
         self.assertIn("What changed in SQLite this year", html)
@@ -315,7 +315,7 @@ class HtmlPreviewTestCase(unittest.TestCase):
             html,
         )
         self.assertNotIn("Read article", html)
-        self.assertIn("Technology worth your time.", html)
+        self.assertIn("today&#x27;s edition", html)
 
 
 if __name__ == "__main__":
