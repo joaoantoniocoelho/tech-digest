@@ -366,7 +366,77 @@ class SendEmailTestCase(unittest.TestCase):
         )
 
 
+class RenderNoteTestCase(unittest.TestCase):
+    def _note(self):
+        return {
+            "title": "Why <agents> & reviews",
+            "url": "https://www.joaoac.com/blog/agents?a=1&b=2",
+            "intro": "First <b>paragraph</b>.\n\nSecond & last paragraph.",
+        }
+
+    def test_missing_or_empty_note_keeps_the_current_email(self):
+        kwargs = {"sent_at": SENT_AT, "unsubscribe_url": "https://api.example.com/u/1"}
+        html = render_html_digest(digest=_digest(), **kwargs)
+        text = render_text_digest(digest=_digest(), **kwargs)
+
+        self.assertNotIn("a note from", html)
+        self.assertNotIn("a note from", text)
+        self.assertEqual(html, render_html_digest(digest={**_digest(), "note": None}, **kwargs))
+        self.assertEqual(text, render_text_digest(digest={**_digest(), "note": None}, **kwargs))
+
+    def test_html_note_comes_before_the_stories(self):
+        plain = render_html_digest(digest=_digest(), sent_at=SENT_AT)
+        html = render_html_digest(digest={**_digest(), "note": self._note()}, sent_at=SENT_AT)
+
+        self.assertIn(">a note from joão</p>", html)
+        self.assertIn("Why &lt;agents&gt; &amp; reviews</a></h2>", html)
+        self.assertIn("First &lt;b&gt;paragraph&lt;/b&gt;.</p>", html)
+        self.assertIn("Second &amp; last paragraph.</p>", html)
+        self.assertNotIn("<b>", html)
+        self.assertEqual(html.count('href="https://www.joaoac.com/blog/agents?a=1&amp;b=2"'), 2)
+        self.assertIn(">read the full article&nbsp;&rarr;</a>", html)
+        self.assertLess(html.index("a note from joão"), html.index(">01</td>"))
+        self.assertLess(html.index("read the full article"), html.index(">01</td>"))
+
+        # Everything else in the email is untouched: removing the block gives the plain one.
+        start = html.index('<tr><td style="padding-top:28px;"><p')
+        end = html.index("</td></tr>", start) + len("</td></tr>\n")
+        self.assertEqual(html[:start] + html[end:], plain)
+
+    def test_text_note_comes_before_the_stories(self):
+        text = render_text_digest(
+            digest={**_digest(), "note": self._note()},
+            show_score=False,
+            show_topics=False,
+        )
+
+        self.assertIn(
+            "a note from joão\n"
+            "Why <agents> & reviews\n"
+            "\n"
+            "First <b>paragraph</b>.\n"
+            "\n"
+            "Second & last paragraph.\n"
+            "\n"
+            "read the full article: https://www.joaoac.com/blog/agents?a=1&b=2\n",
+            text,
+        )
+        self.assertLess(text.index("read the full article"), text.index("1. Tom & Jerry"))
+
+    def test_note_is_dropped_when_there_are_no_articles(self):
+        digest = {"lookback_hours": 24, "articles": [], "note": self._note()}
+
+        self.assertNotIn("a note from", render_html_digest(digest=digest, sent_at=SENT_AT))
+        self.assertNotIn("a note from", render_text_digest(digest=digest))
+
+
 class SendDailyDigestTestCase(unittest.TestCase):
+    def setUp(self):
+        # These tests mock the database away; notes are covered in test_notes.py.
+        patcher = patch("app.send_digest.get_pending_note", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _article(self):
         return {
             "id": 7,

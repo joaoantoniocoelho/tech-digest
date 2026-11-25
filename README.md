@@ -299,6 +299,8 @@ Each recipient gets an individual message so unsubscribe links remain private.
 
 Delivery failures are isolated per recipient and do not prevent the remaining subscriber list from receiving the edition.
 
+An edition can open with "a note from joão": a hand-written intro to a new post on the author's blog, sent once and only after explicit approval. See [Authorial notes](docs/editorial.md).
+
 Published editions are also available to the public site through `GET /digests` and
 `GET /digests/YYYY-MM-DD`. These read the articles already marked as delivered in
 SQLite, so past editions need no backfill and each new edition appears after a
@@ -319,7 +321,7 @@ Right after the first successful send, the sender marks the articles delivered
 (stamped with the send time, so the edition date matches the email's share links)
 and calls the public site's authenticated revalidation endpoint. Publishing before
 the remaining sends keeps the edition link in the email from returning `404`. Set
-the same `DIGEST_REVALIDATE_TOKEN` in Railway and Vercel; the optional
+the same `DIGEST_REVALIDATE_TOKEN` in the API's `.env` and in the site's secrets; the optional
 `DIGEST_SITE_URL` overrides the default `https://digest.joaoac.com`. Failed
 revalidation is logged and retried three times without repeating email delivery.
 
@@ -374,7 +376,8 @@ Never commit real secrets.
 - public subscribe/unsubscribe flow
 - processing and delivery logs
 - Docker-based local development
-- production deployment support for Railway
+- production deployment on a VPS with Docker Compose and Cloudflare Tunnel
+- consistent database backups
 
 ## Project Structure
 
@@ -411,6 +414,7 @@ tech-digest/
 │
 ├── Dockerfile
 ├── compose.yaml
+├── compose.prod.yaml
 ├── railway.toml
 ├── requirements.txt
 └── README.md
@@ -525,7 +529,7 @@ The production environment is responsible for:
 
 A single-writer deployment keeps the SQLite architecture intentionally simple.
 
-See [Operations](docs/operations.md) for deployment details, environment variables, health checks, manual job execution, and persistence verification.
+It runs on a VPS with Docker Compose behind a Cloudflare Tunnel and deploys from `master`. See [Production](docs/production.md) for deploys, configuration, backups, manual jobs and troubleshooting.
 
 ## Testing
 
@@ -567,6 +571,8 @@ More details:
 - [Architecture](docs/architecture.md)
 - [Relevance Scoring](docs/relevance-scoring.md)
 - [Operations](docs/operations.md)
+- [Authorial notes](docs/editorial.md)
+- [Production](docs/production.md)
 - [Roadmap](docs/roadmap.md)
 
 ## Status

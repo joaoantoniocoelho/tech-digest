@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Runs a Python module inside the production container, e.g.:
+#   scripts/prod app.notes list
+#   scripts/prod app.notes save - < note.yaml
+#   scripts/prod app.backup --check
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+if [[ $# -eq 0 ]]; then
+  echo "usage: scripts/prod <module> [args...]" >&2
+  exit 2
+fi
+
+exec docker compose -f compose.prod.yaml exec -T app python -m "$@"

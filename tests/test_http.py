@@ -579,6 +579,61 @@ class HttpApiTestCase(unittest.TestCase):
         self.assertIn(b"not valid", missing)
         self.assertNotIn(b"reader@example.com", missing)
 
+    def test_edition_shows_only_a_sent_note(self):
+        with db.get_connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO articles (
+                    source, title, url, relevance_score, processed_at, delivered_at
+                )
+                VALUES ('Feed', 'Story', 'https://example.com/story', 80,
+                        '2026-11-23 10:00:00', '2026-11-23 10:00:00'),
+                       ('Feed', 'Older', 'https://example.com/older', 80,
+                        '2026-11-22 10:00:00', '2026-11-22 10:00:00')
+                """
+            )
+        db.save_note_draft(
+            {
+                "slug": "my-post",
+                "title": "My post",
+                "url": "https://www.joaoac.com/blog/my-post",
+                "intro": "First paragraph.\n\nSecond paragraph.",
+                "published_at": "2026-11-20",
+            }
+        )
+        db.set_note_approval("my-post", approved=True)
+
+        # Approved but not sent yet: the public archive must not leak it.
+        status, _headers, body = self.request("GET", "/digests/2026-11-23")
+        self.assertEqual(status, 200)
+        self.assertIsNone(json.loads(body)["note"])
+
+        note = db.get_pending_note("2026-11-23")
+        assert note is not None
+        db.mark_note_sent(note["id"], "2026-11-23")
+
+        status, _headers, body = self.request("GET", "/digests/2026-11-23")
+        self.assertEqual(
+            json.loads(body)["note"],
+            {
+                "title": "My post",
+                "url": "https://www.joaoac.com/blog/my-post",
+                "intro": "First paragraph.\n\nSecond paragraph.",
+            },
+        )
+
+        status, _headers, body = self.request("GET", "/digests/2026-11-22")
+        self.assertIsNone(json.loads(body)["note"])
+
+    def test_notes_have_no_http_admin_surface(self):
+        with patch.dict("os.environ", {"DIGEST_JOB_TOKEN": "secret-token"}):
+            for method, path in (("GET", "/notes"), ("POST", "/notes/my-post/approve")):
+                with self.subTest(path=path):
+                    status, _headers, _body = self.request(
+                        method, path, headers={"Authorization": "Bearer secret-token"}
+                    )
+                    self.assertEqual(status, 404)
+
     def test_job_endpoint_auth_and_lock(self):
         from app.pipeline import (
             acquire_pipeline_lock,

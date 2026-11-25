@@ -5,6 +5,7 @@ from datetime import datetime
 import httpx
 
 from app.db import _parse_article_datetime
+from app.notes import note_paragraphs
 from app.share import edition_date, share_links
 
 RESEND_API_URL = "https://api.resend.com/emails"
@@ -262,6 +263,33 @@ def _render_share(links: dict[str, str]) -> str:
     )
 
 
+NOTE_LABEL = "a note from joão"
+NOTE_CTA = "read the full article"
+
+
+def _render_note(note: dict) -> str:
+    href = _esc(_article_href(_clean(note.get("url"))))
+    paragraphs = "".join(
+        f'<p style="margin:10px 0 0;{_sans()}font-size:15px;line-height:22px;'
+        f'color:{COPY};">{_esc(paragraph)}</p>'
+        for paragraph in note_paragraphs(_clean(note.get("intro")))
+    )
+
+    return (
+        '<tr><td style="padding-top:28px;">'
+        f'<p style="margin:0;{_sans(600)}font-size:13px;line-height:18px;'
+        f'color:{MUTED};">{NOTE_LABEL}</p>'
+        f'<h2 class="story" style="margin:6px 0 0;{_sans(600)}font-size:18px;line-height:24px;'
+        f'color:{INK};"><a href="{href}" style="color:{INK};text-decoration:none;">'
+        f"{_esc(_clean(note.get('title')))}</a></h2>"
+        f"{paragraphs}"
+        f'<p style="margin:12px 0 0;"><a href="{href}" style="{_sans(600)}font-size:14px;'
+        f"line-height:20px;color:{INK};text-decoration:underline;"
+        f'text-underline-offset:2px;">{NOTE_CTA}&nbsp;&rarr;</a></p>'
+        "</td></tr>"
+    )
+
+
 def _render_footer(unsubscribe_url: str | None) -> str:
     links = [("website", "https://joaoac.com"), ("x", "https://x.com/joaoac_")]
     if unsubscribe_url:
@@ -402,12 +430,17 @@ def render_html_digest(
     articles = digest.get("articles") or []
     edition_line = _edition_line(sent_at, len(articles), digest.get("lookback_hours", 24))
 
+    note = digest.get("note")
+
     if articles:
         rows = (
             _render_stories(articles, show_score, show_topics)
             + "\n"
             + _render_share(digest_share_links(sent_at))
         )
+        # The note only ever rides along with a curated edition.
+        if note:
+            rows = _render_note(note) + "\n" + rows
     else:
         rows = _render_paragraph("no articles passed the relevance threshold.")
 
