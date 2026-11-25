@@ -1,2 +1,3 @@
 app/db.py :: aprovado pelo usuário em 2026-10-05 (acquisition source tracking)
 app/db.py :: aprovado pelo usuário em 2026-10-05 (subscribers.created_at)
+app/db.py :: aprovado pelo usuário em 2026-11-23 (author_notes table)

@@ -1,5 +1,7 @@
 # Operations
 
+This page covers local development and one-shot commands. Running, deploying and troubleshooting the live service is in [production.md](production.md).
+
 ## Local Development
 
 Activate the Python environment:
@@ -62,6 +64,15 @@ python -m app.digest
 
 This selects recent classified articles, applies the relevance threshold (`minimum_score: 60`) and article cap (`maximum_articles: 8`), and prints the digest. It does not send email and does not mark articles as delivered.
 
+To see the email itself, with and without an authorial note, use sample articles:
+
+```bash
+python -m app.digest --sample --html preview/digest.html
+python -m app.digest --sample --note --html preview/digest-with-note.html
+```
+
+Registering and approving a real note is described in [editorial.md](editorial.md).
+
 `config/digest.yaml` hides scores and topic lists in the rendered digest by default (`show_score: false`, `show_topics: false`). The Why line is the compact feature labels.
 
 ## Send the Digest
@@ -74,7 +85,7 @@ This sends the digest by email through Resend and marks the selected articles as
 
 After marking the articles delivered, it asks the public site to invalidate the
 archive, the new edition, and the previous edition. Set the same
-`DIGEST_REVALIDATE_TOKEN` in Railway and Vercel. `DIGEST_SITE_URL` optionally
+`DIGEST_REVALIDATE_TOKEN` in the API's `.env` and in the site's secrets. `DIGEST_SITE_URL` optionally
 overrides `https://digest.joaoac.com`; it is also the origin of the share links in
 the email, so point it at a local or alternate deployment only when sending test
 emails, never for a real send. The
@@ -174,7 +185,7 @@ SQLite database:
 data/digest.db
 ```
 
-Override the path with `DIGEST_DB_PATH`. Production sets that variable to the file on the Railway volume.
+Override the path with `DIGEST_DB_PATH`. Production sets it to `/data/digest.db`, a directory mounted from the VPS (see [production.md](production.md)).
 
 The database is not included in Git.
 

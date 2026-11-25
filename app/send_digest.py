@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from app.db import mark_articles_delivered
+from app.db import get_pending_note, mark_articles_delivered, mark_note_sent
 from app.digest import (
     build_digest,
     load_digest_config,
@@ -13,6 +13,7 @@ from app.email import (
 )
 from app.log import log_event, redact_email, redact_text
 from app.publication import revalidate_published_edition
+from app.share import edition_date
 from app.subscribers import (
     list_active_subscribers,
     unsubscribe_url,
@@ -58,6 +59,10 @@ def send_daily_digest() -> dict:
     show_topics = config.get("show_topics", False)
     sent_at = datetime.now().astimezone()
     subject = digest_subject(sent_at)
+    note = get_pending_note(edition_date(sent_at))
+
+    if note:
+        digest = {**digest, "note": note}
     sent = 0
     failed = 0
 
@@ -104,7 +109,7 @@ def send_daily_digest() -> dict:
         # Publish right after the first successful send: the email links to the
         # public edition, which 404s until the articles are marked delivered.
         if sent == 1:
-            _publish_edition(articles, sent_at)
+            _publish_edition(articles, note, sent_at)
 
     summary["sent"] = sent
     summary["failed_sends"] = failed
@@ -126,7 +131,14 @@ def send_daily_digest() -> dict:
     raise RuntimeError(f"Digest email failed for all {failed} subscribers")
 
 
-def _publish_edition(articles: list[dict], sent_at: datetime) -> None:
+def _publish_edition(articles: list[dict], note: dict | None, sent_at: datetime) -> None:
+    # The note is settled first and only once an email carrying it has gone
+    # out. From here on it is at-most-once: a later run never includes it
+    # again, even for subscribers whose send failed in this one.
+    if note:
+        mark_note_sent(note["id"], edition_date(sent_at))
+        log_event("note_sent", slug=note["slug"], edition=edition_date(sent_at))
+
     mark_articles_delivered(
         article_ids=[article["id"] for article in articles],
         delivered_at=sent_at,

@@ -1,0 +1,39 @@
+# Production on the VPS: the app and the Cloudflare Tunnel that publishes it.
+# No port is published on the host; only the tunnel reaches the app.
+# Start and update it with scripts/deploy. See docs/production.md.
+name: tech-digest-prod
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: "8080"
+      TZ: America/Sao_Paulo
+      DIGEST_DB_PATH: /data/digest.db
+    volumes:
+      - ./data:/data
+    # The app drains HTTP and stops the scheduler on SIGTERM.
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+    depends_on:
+      app:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"

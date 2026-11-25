@@ -171,6 +171,25 @@ def init_db():
             """
         )
 
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS author_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                url TEXT NOT NULL,
+                intro TEXT NOT NULL,
+                published_at TEXT,
+                status TEXT NOT NULL DEFAULT 'draft',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                approved_at TEXT,
+                edition_date TEXT,
+                sent_at TEXT
+            )
+            """
+        )
+
 
 def save_article(article: dict) -> bool:
     with get_connection() as connection:
@@ -702,6 +721,256 @@ def get_public_edition(edition_date: str) -> dict | None:
     return {
         "date": edition_date,
         "articles": articles,
+        "note": get_edition_note(edition_date),
         "older_date": neighbors["older_date"],
         "newer_date": neighbors["newer_date"],
     }
+
+
+_NOTE_COLUMNS = (
+    "id, slug, title, url, intro, published_at, status, "
+    "created_at, updated_at, approved_at, edition_date, sent_at"
+)
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def list_notes() -> list[dict]:
+    with get_connection() as connection:
+        rows = connection.execute(
+            f"""
+            SELECT {_NOTE_COLUMNS}
+            FROM author_notes
+            ORDER BY id DESC
+            """
+        ).fetchall()
+
+    return [dict(row) for row in rows]
+
+
+def get_note(slug: str) -> dict | None:
+    with get_connection() as connection:
+        row = connection.execute(
+            f"""
+            SELECT {_NOTE_COLUMNS}
+            FROM author_notes
+            WHERE slug = ?
+            """,
+            (slug,),
+        ).fetchone()
+
+    return dict(row) if row else None
+
+
+def save_note_draft(note: dict) -> str:
+    """Create or update a note as a draft. Returns created, updated or sent."""
+    now = _utc_timestamp()
+
+    with get_connection() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        row = connection.execute(
+            """
+            SELECT status
+            FROM author_notes
+            WHERE slug = ?
+            """,
+            (note["slug"],),
+        ).fetchone()
+
+        if row is None:
+            connection.execute(
+                """
+                INSERT INTO author_notes (
+                    slug, title, url, intro, published_at,
+                    status, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, 'draft', ?, ?)
+                """,
+                (
+                    note["slug"],
+                    note["title"],
+                    note["url"],
+                    note["intro"],
+                    note["published_at"],
+                    now,
+                    now,
+                ),
+            )
+            return "created"
+
+        # A sent note is the record of what subscribers received.
+        if row["status"] == "sent":
+            return "sent"
+
+        # Any edit drops the approval: only the exact reviewed text may be sent.
+        connection.execute(
+            """
+            UPDATE author_notes
+            SET title = ?,
+                url = ?,
+                intro = ?,
+                published_at = ?,
+                status = 'draft',
+                approved_at = NULL,
+                updated_at = ?
+            WHERE slug = ?
+              AND status != 'sent'
+            """,
+            (
+                note["title"],
+                note["url"],
+                note["intro"],
+                note["published_at"],
+                now,
+                note["slug"],
+            ),
+        )
+
+    return "updated"
+
+
+def set_note_approval(slug: str, approved: bool) -> str:
+    """Returns ok, missing or sent."""
+    now = _utc_timestamp()
+
+    with get_connection() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        row = connection.execute(
+            """
+            SELECT status
+            FROM author_notes
+            WHERE slug = ?
+            """,
+            (slug,),
+        ).fetchone()
+
+        if row is None:
+            return "missing"
+
+        if row["status"] == "sent":
+            return "sent"
+
+        target = "approved" if approved else "draft"
+        if row["status"] == target:
+            return "ok"
+
+        connection.execute(
+            """
+            UPDATE author_notes
+            SET status = ?,
+                approved_at = ?,
+                updated_at = ?
+            WHERE slug = ?
+              AND status != 'sent'
+            """,
+            (target, now if approved else None, now, slug),
+        )
+
+    return "ok"
+
+
+def get_pending_note(edition_date: str) -> dict | None:
+    """Oldest approved note, unless this edition already carried one."""
+    with get_connection() as connection:
+        taken = connection.execute(
+            """
+            SELECT 1
+            FROM author_notes
+            WHERE edition_date = ?
+            """,
+            (edition_date,),
+        ).fetchone()
+
+        if taken is not None:
+            return None
+
+        row = connection.execute(
+            f"""
+            SELECT {_NOTE_COLUMNS}
+            FROM author_notes
+            WHERE status = 'approved'
+            ORDER BY approved_at, id
+            LIMIT 1
+            """
+        ).fetchone()
+
+    return dict(row) if row else None
+
+
+def mark_note_sent(note_id: int, edition_date: str) -> bool:
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE author_notes
+            SET status = 'sent',
+                edition_date = ?,
+                sent_at = ?,
+                updated_at = ?
+            WHERE id = ?
+              AND status = 'approved'
+            """,
+            (edition_date, _utc_timestamp(), _utc_timestamp(), note_id),
+        )
+
+    return cursor.rowcount == 1
+
+
+def get_edition_note(edition_date: str) -> dict | None:
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT title, url, intro
+            FROM author_notes
+            WHERE status = 'sent'
+              AND edition_date = ?
+            ORDER BY id
+            LIMIT 1
+            """,
+            (edition_date,),
+        ).fetchone()
+
+    return dict(row) if row else None
+
+
+def backup_database(output: Path) -> None:
+    """Write a consistent copy of the live database, safe while the app is running."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    with get_connection() as source:
+        target = sqlite3.connect(output)
+        try:
+            source.backup(target)
+        finally:
+            target.close()
+
+
+def database_summary(path: Path | None = None) -> dict[str, str | int | None]:
+    """Integrity and row counts, to compare a copy against its source."""
+    counts = {
+        "articles": "SELECT COUNT(*) FROM articles",
+        "delivered_articles": "SELECT COUNT(*) FROM articles WHERE delivered_at IS NOT NULL",
+        "active_subscribers": "SELECT COUNT(*) FROM subscribers WHERE status = 'active'",
+        "subscribers": "SELECT COUNT(*) FROM subscribers",
+        "notes": "SELECT COUNT(*) FROM author_notes",
+        "last_edition": "SELECT MAX(date(delivered_at)) FROM articles",
+        "last_job": "SELECT MAX(finished_at) FROM job_runs",
+    }
+    # Read-only, so checking a copy never creates or changes a file.
+    connection = sqlite3.connect(f"file:{path or DB_PATH}?mode=ro", uri=True)
+
+    try:
+        summary: dict[str, str | int | None] = {
+            "integrity": connection.execute("PRAGMA integrity_check").fetchone()[0]
+        }
+        for name, query in counts.items():
+            try:
+                summary[name] = connection.execute(query).fetchone()[0]
+            except sqlite3.OperationalError:
+                # A database from before the table existed.
+                summary[name] = None
+    finally:
+        connection.close()
+
+    return summary

@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Updates production on the VPS to origin/master and restarts the containers.
+# Run it from the production checkout; the GitHub deploy workflow runs it over SSH.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+readonly COMPOSE=(docker compose -f compose.prod.yaml)
+readonly JOB_WAIT_SECONDS=900
+readonly HEALTH_WAIT_SECONDS=180
+
+app_is_running() {
+  "${COMPOSE[@]}" ps --status running --services 2>/dev/null | grep -qx app
+}
+
+job_is_running() {
+  "${COMPOSE[@]}" exec -T app python -c \
+    "from app.pipeline import lock_is_fresh; raise SystemExit(0 if lock_is_fresh() else 1)"
+}
+
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$branch" != "master" ]]; then
+  echo "deploy: production checkout must be on master (found '$branch')" >&2
+  exit 1
+fi
+
+if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+  echo "deploy: production checkout has local changes; refusing to deploy" >&2
+  exit 1
+fi
+
+git fetch --quiet origin master
+git merge --ff-only --quiet origin/master
+echo "deploy: at $(git rev-parse --short HEAD)"
+
+if app_is_running; then
+  # Restarting mid-job would cut a collection or, worse, a send in half.
+  waited=0
+  while job_is_running; do
+    if ((waited >= JOB_WAIT_SECONDS)); then
+      echo "deploy: a pipeline job is still running after ${JOB_WAIT_SECONDS}s; try again later" >&2
+      exit 1
+    fi
+    echo "deploy: waiting for the running pipeline job..."
+    sleep 15
+    waited=$((waited + 15))
+  done
+
+  "${COMPOSE[@]}" exec -T app python -m app.backup
+fi
+
+"${COMPOSE[@]}" up -d --build --remove-orphans
+
+container=$("${COMPOSE[@]}" ps -q app)
+waited=0
+until [[ "$(docker inspect --format '{{.State.Health.Status}}' "$container")" == "healthy" ]]; do
+  if ((waited >= HEALTH_WAIT_SECONDS)); then
+    echo "deploy: app is not healthy after ${HEALTH_WAIT_SECONDS}s" >&2
+    "${COMPOSE[@]}" logs --tail 50 app >&2
+    exit 1
+  fi
+  sleep 5
+  waited=$((waited + 5))
+done
+
+"${COMPOSE[@]}" ps
+echo "deploy: ok"

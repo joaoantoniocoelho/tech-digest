@@ -320,6 +320,14 @@ The HTML email mirrors the sample on digest.joaoac.com: same colors, lowercase c
 
 Delivery goes through Resend (`digest.joaoac.com`). The digest is built once, then sent separately to each active subscriber with that subscriber's unsubscribe link. Articles are marked delivered when at least one send succeeds. `send_digest` does not call Telegram.
 
+### Authorial notes
+
+Implemented in `app/notes.py` (validation and the editorial CLI) with storage in the `author_notes` table (`app/db.py`). A note is a title, a link to the English blog post and a hand-written intro, with a status of `draft`, `approved` or `sent`. The workflow is in [editorial.md](editorial.md).
+
+At send time the oldest approved note is attached to the digest, as a section above the curated list in both the HTML and the text email, unless that edition date already carried a note. It is marked `sent` with its `edition_date` right after the first successful send, together with the articles, so it is at-most-once: later runs never include it again. With no approved note the email is exactly what it was before notes existed. A note never causes a send by itself: no curated articles means no email, and the note waits.
+
+`GET /digests/<date>` returns the edition's sent note in `note` (`null` when there is none). There is no HTTP route to create or approve notes: `python -m app.notes` writes to the database directly, so it runs on the server.
+
 `app/telegram.py` and `app/notify.py` send operator alerts to `TELEGRAM_CHAT_ID` when the bot token is configured: collect, classification, digest send, subscribe, and unsubscribe. Alerts are best-effort and omit full email addresses.
 
 Subscribers live in the same SQLite database (`subscribers`). `POST /subscribe` activates an address, including one that had unsubscribed. The request may carry optional attribution (`acquisition_source` from `?ref=`, `acquisition_url`, `utm_source`, `utm_medium`, `utm_campaign`), normalized by `normalize_attribution` in `app/subscribers.py` and stored in nullable columns of the same name. The frontend sends `acquisition_source=direct` when the visit has neither `ref` nor UTM parameters, so `NULL` means pre-tracking or a UTM-only visit. Attribution and `created_at` (the signup date) are first-touch: written only on insert, never on repeat subscriptions or reactivation. `subscribed_at` is the latest activation and is reset on reactivation; `init_db` backfills a missing `created_at` from `subscribed_at`. The JSON body limit is 8192 bytes. When an address becomes active, a background thread sends a welcome email (`app/welcome.py`) with the latest delivered edition: the articles sharing the most recent `delivered_at`. If nothing has been delivered yet, the email says the first edition is coming. Repeat subscriptions of an active address send nothing, and a failed welcome send is logged as `welcome_send` without affecting the subscribe response. `GET /unsubscribe/<token>` only shows a confirmation page; `POST` performs the unsubscribe, so mail clients that prefetch links do not remove people.
@@ -333,9 +341,11 @@ Local Compose still runs one-shot jobs. The `digest` service overrides the image
 Persistent data:
 
 ```text
-local Compose: ./data:/app/data
-production:    DIGEST_DB_PATH, mounted volume
+local Compose (compose.yaml):           ./data:/app/data
+production (compose.prod.yaml, VPS):    ./data:/data
 ```
+
+Production adds a `cloudflared` container that publishes the app through a Cloudflare Tunnel, so the host exposes no port. See [production.md](production.md).
 
 The database path is `DIGEST_DB_PATH`. It defaults to `data/digest.db`.
 
@@ -345,7 +355,7 @@ Classification requires outbound HTTPS to `api.typesafe.ai`. Logs redact API key
 
 ## Scheduling
 
-Production does not use host cron or a second Railway service. A scheduler thread inside the API process runs in `America/Sao_Paulo`:
+Production does not use host cron or a second service for the pipeline. A scheduler thread inside the API process runs in `America/Sao_Paulo`:
 
 ```text
 collect   every 4 hours at minute 00 (00:00, 04:00, 08:00, 12:00, 16:00, 20:00)

@@ -10,6 +10,8 @@ from app.db import (
     init_db,
 )
 from app.email import (
+    NOTE_CTA,
+    NOTE_LABEL,
     SHARE_LINE,
     SHARE_LINK_LABEL,
     SHARE_TITLE,
@@ -19,6 +21,7 @@ from app.email import (
     digest_share_links,
 )
 from app.log import log_event
+from app.notes import note_paragraphs
 
 CONFIG_PATH = Path("config/digest.yaml")
 INTERESTS_PATH = Path("config/interests.yaml")
@@ -180,6 +183,14 @@ def render_text_digest(
 
     lines.append("")
 
+    note = digest.get("note")
+
+    if note:
+        lines.extend([NOTE_LABEL, note["title"], ""])
+        for paragraph in note_paragraphs(note["intro"]):
+            lines.extend([paragraph, ""])
+        lines.extend([f"{NOTE_CTA}: {note['url']}", "", "=" * 60, ""])
+
     for index, article in enumerate(
         articles,
         start=1,
@@ -271,6 +282,19 @@ def render_text_welcome(
     return "\n".join(lines)
 
 
+def sample_note() -> dict:
+    return {
+        "title": "The agent shouldn't judge its own code",
+        "url": "https://www.joaoac.com/blog/the-agent-shouldnt-judge-its-own-code",
+        "intro": (
+            "Placeholder intro for the preview. The real note is written and approved "
+            "by hand, in the author's own words.\n\n"
+            "A second short paragraph shows how the spacing looks before the "
+            "curated reads start."
+        ),
+    }
+
+
 def sample_digest() -> dict:
     return {
         "lookback_hours": 24,
@@ -320,6 +344,11 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Use sample articles instead of the database.",
     )
+    parser.add_argument(
+        "--note",
+        action="store_true",
+        help="Include a sample authorial note.",
+    )
     args = parser.parse_args(argv)
 
     config = load_digest_config()
@@ -327,6 +356,9 @@ def main(argv: list[str] | None = None) -> None:
     show_topics = config.get("show_topics", True)
 
     digest = sample_digest() if args.sample else build_digest()
+
+    if args.note:
+        digest = {**digest, "note": sample_note()}
 
     output = render_text_digest(
         digest=digest,
