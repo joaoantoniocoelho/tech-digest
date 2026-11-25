@@ -415,7 +415,6 @@ tech-digest/
 ├── Dockerfile
 ├── compose.yaml
 ├── compose.prod.yaml
-├── railway.toml
 ├── requirements.txt
 └── README.md
 ```

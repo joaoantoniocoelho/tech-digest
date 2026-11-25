@@ -958,7 +958,9 @@ def database_summary(path: Path | None = None) -> dict[str, str | int | None]:
         "last_job": "SELECT MAX(finished_at) FROM job_runs",
     }
     # Read-only, so checking a copy never creates or changes a file.
-    connection = sqlite3.connect(f"file:{path or DB_PATH}?mode=ro", uri=True)
+    # as_uri() keeps odd paths (relative, doubled slashes) from being read as a URI authority.
+    uri = f"{Path(path or DB_PATH).resolve().as_uri()}?mode=ro"
+    connection = sqlite3.connect(uri, uri=True)
 
     try:
         summary: dict[str, str | int | None] = {

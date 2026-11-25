@@ -75,6 +75,11 @@ class BackupTestCase(unittest.TestCase):
         self.assertIsNone(summary["notes"])
         self.assertEqual(summary["articles"], 1)
 
+    def test_summary_reads_a_path_with_a_doubled_leading_slash(self):
+        doubled = f"/{db.DB_PATH.resolve()}"
+
+        self.assertEqual(db.database_summary(doubled), db.database_summary())
+
     def test_checking_a_missing_copy_does_not_create_it(self):
         missing = self.root / "nope.db"
 
