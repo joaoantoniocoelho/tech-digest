@@ -54,13 +54,21 @@ class NormalizeNoteTestCase(unittest.TestCase):
         self.assertIsNone(notes.normalize_note(_payload(published_at=None))["published_at"])
         self.assertIsNone(notes.normalize_note(_payload(published_at=""))["published_at"])
 
+    def test_url_is_optional_for_a_standalone_comment(self):
+        for missing in ("", None):
+            with self.subTest(url=missing):
+                self.assertEqual(notes.normalize_note(_payload(url=missing))["url"], "")
+
+        payload = _payload()
+        del payload["url"]
+        self.assertEqual(notes.normalize_note(payload)["url"], "")
+
     def test_rejects_invalid_fields(self):
         invalid = {
             "slug": ["", "My-Post", "a b", "-a", "a" * 121, None],
             "title": ["", "   ", None, "x" * 201],
             "url": [
-                "",
-                None,
+                123,
                 "https://www.joaoac.com/blog/",
                 "https://www.joaoac.com/pt-BR/blog/my-post",
                 "http://www.joaoac.com/blog/my-post",

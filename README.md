@@ -159,7 +159,7 @@ The daily processor selects eligible unprocessed articles from the configured pu
 
 Article text exists only during processing and is discarded afterward.
 
-The digest builder ranks eligible articles, considers a larger candidate pool, removes repeated coverage of the same stories, and fills the final edition with up to eight articles.
+The digest builder ranks eligible articles, considers a larger candidate pool, removes repeated coverage of the same stories, and fills the final edition with up to five articles, the first one featured.
 
 ## Classification
 
@@ -217,6 +217,10 @@ Python keeps the preferred representative deterministically and continues fillin
 
 This prevents repeated coverage from consuming multiple slots while still allowing distinct analysis or follow-up pieces to compete independently.
 
+The comparison also covers the stories delivered in the last three days, so the same story does not return in a later edition.
+
+Before that, fixed editorial rules cap how many articles one source can place in an edition (three for Hacker News) and drop job posts, profane titles, resurfaced old posts, and all but one "Show HN" per edition. See [Relevance Scoring](docs/relevance-scoring.md#editorial-rules).
+
 ## Content Acquisition
 
 The preferred path is:
@@ -240,11 +244,11 @@ Sources are configured in `config/sources.yaml`.
 
 The current mix includes:
 
-- Hacker News;
+- Hacker News and Lobsters, capped per edition;
 - engineering and technology newsletters;
-- selected technical blogs;
+- first-hand technical blogs (Simon Willison, Julia Evans, Dan Luu, Cloudflare, GitHub Engineering);
 - technology publications;
-- official RSS feeds such as OpenAI's news feed.
+- official RSS feeds such as OpenAI's and Google DeepMind's.
 
 RSS sources may optionally limit how many entries are imported from unusually large historical feeds.
 
@@ -371,7 +375,7 @@ Never commit real secrets.
 - explicit editorial score floors
 - configurable interest profile
 - semantic story deduplication with Jev
-- ranked top-8 daily digest
+- ranked top-5 daily digest with a featured pick
 - HTML email delivery through Resend
 - public subscribe/unsubscribe flow
 - processing and delivery logs

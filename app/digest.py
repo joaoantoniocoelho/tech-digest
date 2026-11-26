@@ -7,9 +7,11 @@ import yaml
 from app.classifier import is_duplicate_story
 from app.db import (
     get_digest_candidates,
+    get_recently_delivered,
     init_db,
 )
 from app.email import (
+    FEATURED_LABEL,
     NOTE_CTA,
     NOTE_LABEL,
     SHARE_LINE,
@@ -20,6 +22,7 @@ from app.email import (
     WELCOME_LINES,
     digest_share_links,
 )
+from app.filters import is_blocked_title, is_launch_post
 from app.log import log_event
 from app.notes import note_paragraphs
 
@@ -91,9 +94,12 @@ def build_digest() -> dict:
     minimum_score = config["minimum_score"]
     maximum_articles = config["maximum_articles"]
 
+    minimum_articles = config.get("minimum_articles", 0)
+    fallback_score = min(config.get("fallback_minimum_score", minimum_score), minimum_score)
+
     candidates = get_digest_candidates(
         lookback_hours=lookback_hours,
-        minimum_score=minimum_score,
+        minimum_score=fallback_score,
     )
 
     # Diversity only reorders candidates that already passed
@@ -103,12 +109,40 @@ def build_digest() -> dict:
     groups = {id(candidate): _primary_group(candidate, topic_groups) for candidate in candidates}
     group_counts: dict[str | None, int] = {}
 
+    title_filters = config.get("title_filters") or {}
+    source_limits = config.get("source_limits") or {}
+    max_launch_posts = title_filters.get("max_launch_posts")
+    dedup_days = config.get("dedup_lookback_days") or 0
+    recently_delivered = get_recently_delivered(dedup_days) if dedup_days else []
+
     articles: list[dict] = []
     skipped_title = 0
     skipped_semantic = 0
-    remaining = list(candidates)
+    skipped_source = 0
+    skipped_launch = 0
+    source_counts: dict[str, int] = {}
+    launch_posts = 0
+    allowed = [
+        candidate
+        for candidate in candidates
+        if not is_blocked_title(candidate["title"], title_filters)
+    ]
+    skipped_blocked = len(candidates) - len(allowed)
+    remaining = [c for c in allowed if c["relevance_score"] >= minimum_score]
+    fallback = [c for c in allowed if c["relevance_score"] < minimum_score]
+    limit = maximum_articles
+    used_fallback = False
 
-    while remaining and len(articles) < maximum_articles:
+    while len(articles) < limit:
+        if not remaining:
+            # Weak day: top up to the floor from below the cutoff, so a
+            # higher cutoff never costs an edition the old one would send.
+            if used_fallback or not fallback or len(articles) >= minimum_articles:
+                break
+
+            remaining, limit, used_fallback = fallback, minimum_articles, True
+            continue
+
         # max() keeps the first of equal scores, preserving the
         # database order (score, then recency) on ties.
         candidate = max(
@@ -122,17 +156,34 @@ def build_digest() -> dict:
         )
         remaining.remove(candidate)
 
+        source = candidate.get("source") or ""
+        source_limit = source_limits.get(source)
+
+        if source_limit is not None and source_counts.get(source, 0) >= source_limit:
+            skipped_source += 1
+            continue
+
+        is_launch = is_launch_post(candidate["title"])
+
+        if is_launch and max_launch_posts is not None and launch_posts >= max_launch_posts:
+            skipped_launch += 1
+            continue
+
         title = " ".join(candidate["title"].split()).casefold()
 
         if any(title == " ".join(article["title"].split()).casefold() for article in articles):
             skipped_title += 1
             continue
 
-        if articles and is_duplicate_story(candidate, articles):
+        known_stories = articles + recently_delivered
+
+        if known_stories and is_duplicate_story(candidate, known_stories):
             skipped_semantic += 1
             continue
 
         articles.append(candidate)
+        source_counts[source] = source_counts.get(source, 0) + 1
+        launch_posts += is_launch
 
         group = groups[id(candidate)]
 
@@ -145,6 +196,10 @@ def build_digest() -> dict:
         selected=len(articles),
         skipped_title=skipped_title,
         skipped_semantic=skipped_semantic,
+        skipped_blocked=skipped_blocked,
+        skipped_source=skipped_source,
+        skipped_launch=skipped_launch,
+        below_cutoff=sum(article["relevance_score"] < minimum_score for article in articles),
         groups=",".join(f"{group}:{count}" for group, count in sorted(group_counts.items())),
     )
 
@@ -189,12 +244,17 @@ def render_text_digest(
         lines.extend([NOTE_LABEL, note["title"], ""])
         for paragraph in note_paragraphs(note["intro"]):
             lines.extend([paragraph, ""])
-        lines.extend([f"{NOTE_CTA}: {note['url']}", "", "=" * 60, ""])
+        if note.get("url"):
+            lines.extend([f"{NOTE_CTA}: {note['url']}", ""])
+        lines.extend(["=" * 60, ""])
 
     for index, article in enumerate(
         articles,
         start=1,
     ):
+        if index == 1 and len(articles) > 1:
+            lines.append(FEATURED_LABEL)
+
         title_line = f"{index}. {article['title']}"
 
         if show_score:

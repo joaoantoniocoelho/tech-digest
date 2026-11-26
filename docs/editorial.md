@@ -45,6 +45,10 @@ on the VPS are not visible inside the container.
      Second paragraph.
    ```
 
+   `url` is optional. Leave it out for a short comment that stands on its own
+   (two or three sentences on the week): the edition then shows the title and
+   the paragraphs, with no link and no "read the full article".
+
 3. Optionally look at it inside a sample edition. This saves nothing and writes
    `preview/note-<slug>.html`:
 

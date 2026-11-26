@@ -105,6 +105,8 @@ def init_db():
                 """,
             "failed_at": "ALTER TABLE articles ADD COLUMN failed_at TEXT",
             "delivered_at": "ALTER TABLE articles ADD COLUMN delivered_at TEXT",
+            "importance": "ALTER TABLE articles ADD COLUMN importance INTEGER",
+            "feature_strengths": "ALTER TABLE articles ADD COLUMN feature_strengths TEXT",
         }
 
         for column, migration in migrations.items():
@@ -417,6 +419,8 @@ def save_classification(
             SET relevance_score = ?,
                 why_interesting = ?,
                 topics = ?,
+                importance = ?,
+                feature_strengths = ?,
                 processed_at = CURRENT_TIMESTAMP,
                 last_processing_error = NULL,
                 failed_at = NULL
@@ -429,9 +433,51 @@ def save_classification(
                     result["topics"],
                     ensure_ascii=False,
                 ),
+                result.get("importance"),
+                _strengths_json(result.get("feature_strengths")),
                 article_id,
             ),
         )
+
+
+def _strengths_json(feature_strengths: dict | None) -> str | None:
+    if feature_strengths is None:
+        return None
+
+    return json.dumps(feature_strengths, sort_keys=True)
+
+
+def get_scored_articles(days: int) -> list[dict]:
+    """Classifier answers stored in the last `days` days, for offline rescoring."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT source, title, relevance_score, importance,
+                   feature_strengths, processed_at, delivered_at
+            FROM articles
+            WHERE processed_at >= ?
+              AND failed_at IS NULL
+              AND feature_strengths IS NOT NULL
+              AND importance IS NOT NULL
+            ORDER BY processed_at, id
+            """,
+            (cutoff,),
+        ).fetchall()
+
+    return [
+        {
+            "source": row["source"],
+            "title": row["title"],
+            "relevance_score": row["relevance_score"],
+            "importance": row["importance"],
+            "feature_strengths": json.loads(row["feature_strengths"]),
+            "day": row["processed_at"][:10],
+            "delivered": row["delivered_at"] is not None,
+        }
+        for row in rows
+    ]
 
 
 def record_processing_error(
@@ -570,6 +616,25 @@ def get_digest_candidates(
             break
 
     return articles
+
+
+def get_recently_delivered(days: int) -> list[dict]:
+    """Stories delivered in the last `days` days, for cross-day deduplication."""
+    # Same UTC format mark_articles_delivered writes, so strings compare.
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT title, feed_excerpt
+            FROM articles
+            WHERE delivered_at >= ?
+            ORDER BY delivered_at DESC, id DESC
+            """,
+            (cutoff,),
+        ).fetchall()
+
+    return [{"title": row["title"], "feed_excerpt": row["feed_excerpt"]} for row in rows]
 
 
 def mark_articles_delivered(
@@ -931,7 +996,11 @@ def get_edition_note(edition_date: str) -> dict | None:
             (edition_date,),
         ).fetchone()
 
-    return dict(row) if row else None
+    if row is None:
+        return None
+
+    # The column is NOT NULL, so a note without a link stores an empty string.
+    return {**dict(row), "url": row["url"] or None}
 
 
 def backup_database(output: Path) -> None:

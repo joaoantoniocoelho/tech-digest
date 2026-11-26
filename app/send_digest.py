@@ -58,7 +58,7 @@ def send_daily_digest() -> dict:
     show_score = config.get("show_score", False)
     show_topics = config.get("show_topics", False)
     sent_at = datetime.now().astimezone()
-    subject = digest_subject(sent_at)
+    subject = digest_subject(sent_at, articles)
     note = get_pending_note(edition_date(sent_at))
 
     if note:

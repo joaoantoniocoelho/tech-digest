@@ -4,6 +4,8 @@ sources:
   - name: Hacker News
     url: https://news.ycombinator.com/rss
 
+  - name: Lobsters
+    url: https://lobste.rs/rss
 
   # Software engineering / industry
 
@@ -13,6 +15,20 @@ sources:
   - name: The Pragmatic Engineer
     url: https://newsletter.pragmaticengineer.com/feed
 
+  - name: Julia Evans
+    url: https://jvns.ca/atom.xml
+
+  # The feed carries the whole archive; only the newest posts matter.
+  - name: Dan Luu
+    url: https://danluu.com/atom.xml
+    max_entries: 5
+
+  - name: Cloudflare Blog
+    url: https://blog.cloudflare.com/rss/
+
+  - name: GitHub Engineering
+    url: https://github.blog/engineering/feed/
+
   # AI / AI engineering
 
   - name: Latent Space
@@ -21,17 +37,18 @@ sources:
   - name: Interconnects
     url: https://www.interconnects.ai/feed
 
-  - name: Simon Willison's Newsletter
-    url: https://simonw.substack.com/feed
+  - name: Simon Willison
+    url: https://simonwillison.net/atom/everything/
 
   - name: OpenAI
     url: https://openai.com/news/rss.xml
     max_entries: 50
 
-  # Technology news / startups
+  - name: Google DeepMind
+    url: https://deepmind.google/blog/rss.xml
+    max_entries: 20
 
-  - name: The Verge
-    url: https://www.theverge.com/rss/index.xml
+  # Technology news / startups
 
   - name: TechCrunch
     url: https://techcrunch.com/feed/

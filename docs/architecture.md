@@ -312,11 +312,13 @@ app/telegram.py
 The digest selects recent classified articles that:
 
 - fall inside the digest lookback window (`lookback_hours: 24`);
-- meet the relevance threshold (`minimum_score: 60`);
-- stay under the article cap (`maximum_articles: 8`);
+- meet the relevance threshold (`minimum_score: 70`); on a day with fewer than 3 such articles (`minimum_articles`), the edition is topped up to 3 with the best ones at or above `fallback_minimum_score: 60`, so the digest stays daily;
+- stay under the article cap (`maximum_articles: 5`);
+- respect the per-source cap and the fixed title rules (`source_limits`, `title_filters`);
+- do not repeat a story from this edition or from the last 3 days (`dedup_lookback_days`);
 - have not already been delivered.
 
-The HTML email mirrors the sample on digest.joaoac.com: same colors, lowercase copy, light only, numbered list with each article's source, date and Why labels on one line. Scores and topic lists are hidden in the email by default (`show_score` / `show_topics` in `config/digest.yaml`).
+The HTML email mirrors the sample on digest.joaoac.com: same colors, lowercase copy, light only, numbered list with each article's source, date and Why labels on one line. The first article is the edition's pick: larger title, a "today's pick" label, and its title becomes the subject line (`<title> + N links`). Scores and topic lists are hidden in the email by default (`show_score` / `show_topics` in `config/digest.yaml`).
 
 Delivery goes through Resend (`digest.joaoac.com`). The digest is built once, then sent separately to each active subscriber with that subscriber's unsubscribe link. Articles are marked delivered when at least one send succeeds. `send_digest` does not call Telegram.
 

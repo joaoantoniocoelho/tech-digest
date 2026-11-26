@@ -1,4 +1,5 @@
 import ast
+import json
 import runpy
 import tempfile
 import unittest
@@ -709,6 +710,9 @@ class ProcessorSafeguardTestCase(unittest.TestCase):
 
         with db.get_connection() as connection:
             columns = {info["name"] for info in connection.execute("PRAGMA table_info(articles)")}
+
+        self.assertEqual(row["importance"], 1)
+        self.assertEqual(json.loads(row["feature_strengths"]), self._load_zero_features())
 
         self.assertNotIn("content", columns)
         self.assertNotIn("probabilities", columns)

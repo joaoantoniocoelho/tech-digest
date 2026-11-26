@@ -300,7 +300,14 @@ def _build_why_and_topics(
         for feature_id in top_ids
     ]
 
-    why_interesting = " · ".join(labels)
+    # A secondary match is often a passing mention; showing it next to the
+    # link reads as a wrong topic. Fall back to it only when nothing is central.
+    central = [
+        label
+        for feature_id, label in zip(top_ids, labels, strict=True)
+        if feature_strengths[feature_id] == 2
+    ]
+    why_interesting = " · ".join(central or labels)
 
     return why_interesting, labels
 

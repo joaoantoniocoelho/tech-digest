@@ -189,6 +189,9 @@ def _process_article(
             "relevance_score": relevance_score,
             "why_interesting": classification["why_interesting"],
             "topics": classification["topics"],
+            # Kept so a score can be explained and recomputed offline.
+            "importance": classification["importance"],
+            "feature_strengths": classification["feature_strengths"],
         }
 
         save_classification(
