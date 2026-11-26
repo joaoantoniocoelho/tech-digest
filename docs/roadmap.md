@@ -21,6 +21,9 @@ Implemented:
 - debug classification CLI
 - deterministic relevance scoring
 - ranked digest over a publication-time window (score threshold + article cap)
+- per-source cap, fixed title rules, and story deduplication across the last 3 days
+- five-article edition with a featured pick, a daily floor, and a subject line led by the pick
+- stored classifier answers and offline rescoring (`app.rescore`)
 - Email delivery through Resend after a successful send
 
 ## Next: Daily Use and Calibration
@@ -29,6 +32,7 @@ The next work is operational rather than architectural:
 
 - watch a few days of real digests;
 - inspect raw vs discrete Jev scores with `python -m app.debug_classification`;
+- give importance real weight in the score, calibrated with `app.rescore` after a week of stored answers;
 - tune feature weights, include/exclude rules, and the relevance threshold;
 - add or remove sources based on actual usefulness;
 - notice repeated stories across publications.
@@ -61,7 +65,7 @@ Potential improvements:
 - changing feature weights over time;
 - topic diversity;
 - source quality signals;
-- duplicate-story detection across multiple publications.
+- click measurement per link, to calibrate ranking from what readers open.
 
 These should only be added after the basic digest proves useful in daily use.
 

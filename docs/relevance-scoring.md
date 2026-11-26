@@ -174,6 +174,10 @@ This keeps a stacked AI roundup highly ranked without pinning the ceiling at 100
 
 Importance is a small adjustment after feature scoring (`-5 / 0 / +5 / +8`).
 
+Known limit: this makes the score mostly a measure of topic. Two central features already add up to about 70, while quality moves it by 13 points at most, so scores bunch between 61 and 85. The classifier's answers are stored per article (`importance`, `feature_strengths`) so a formula that gives importance real weight can be tested offline with `python -m app.rescore` before it replaces this one (see [operations](operations.md#rescoring-stored-answers)).
+
+The Why line lists only central features (strength 2). Secondary ones appear only when no feature is central: a passing mention shown next to a link reads as a wrong topic. `topics` still keeps the top three.
+
 Negative features apply a capped penalty (at most 25 points).
 
 The final score is clamped to:
@@ -197,7 +201,7 @@ The score is intended to mean roughly:
 
 These ranges are guidelines, not hard editorial rules.
 
-The digest already uses a minimum score (`minimum_score: 60`) plus a maximum number of articles (`maximum_articles: 8`). It does not fill a quota with weaker items.
+The digest uses a minimum score (`minimum_score: 70`) plus a maximum number of articles (`maximum_articles: 5`). It does not fill the edition with weaker items, with one exception that keeps the digest daily: when fewer than `minimum_articles` (3) pass the cutoff, the edition is topped up to 3 with the best candidates at or above `fallback_minimum_score` (60).
 
 ## Edition Diversity
 
@@ -219,7 +223,19 @@ This is a soft preference, not a quota:
 - a much stronger article still wins over a weak one from an under-represented group;
 - if a day only has AI candidates, the edition is still all AI.
 
-Duplicate detection (Jev) runs on each pick as before. It also drops an article that covers the same launch from a very similar angle.
+Duplicate detection (Jev) runs on each pick as before. It also drops an article that covers the same launch from a very similar angle. Each pick is compared with the articles already chosen for the edition and with the stories delivered in the last `dedup_lookback_days` (3) days, so a story does not come back the next morning from another publisher.
+
+## Editorial Rules
+
+Fixed rules in `config/digest.yaml` run before ranking decides anything. They are deterministic and never call the model (`app/filters.py`):
+
+- `source_limits`: at most this many articles per source in one edition (Hacker News 3, Lobsters 2). Aggregators send dozens of candidates a day and would otherwise fill every slot. A capped candidate is skipped and the next one is tried; sources without an entry are not capped.
+- `title_filters.blocked_phrases`: job posts (`is hiring`).
+- `title_filters.blocked_words`: profanity, matched at the start of a word.
+- `title_filters.block_dated_titles`: titles ending in a past year, such as `(2004)`.
+- `title_filters.max_launch_posts`: at most one `Show HN:` / `Launch HN:` post per edition.
+
+Blocked titles are also dropped at collection, so they are never classified. An edition can therefore be shorter than `maximum_articles` even when more candidates pass `minimum_score`.
 
 ## Important Design Rule
 

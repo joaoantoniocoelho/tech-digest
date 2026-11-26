@@ -194,7 +194,7 @@ class DailyPipelineEndToEndTestCase(unittest.TestCase):
         self.assertEqual(len(self.resend.payloads), 1)
         email = self.resend.payloads[0]
         self.assertEqual(email["to"], ["reader@example.com"])
-        self.assertTrue(email["subject"].startswith("João Coelho Tech Digest — "))
+        self.assertEqual(email["subject"], f"{selected[0]} + 1 link")
 
         for body in (email["html"], email["text"]):
             self.assertIn(MODEL_LAUNCH, body)

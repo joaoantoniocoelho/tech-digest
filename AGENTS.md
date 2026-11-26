@@ -12,9 +12,9 @@ Python 3.12, stdlib-first (`http.server`, `sqlite3`, `unittest`), deps em `requi
 
 ## Como o Digest funciona
 - **Coleta** (`app.main`, a cada 4h e 06:45): lê os feeds de `config/sources.yaml` e grava só metadados novos.
-- **Classificação** (`app.process_daily`, 06:50): busca o texto, classifica com Jev, pontua de forma determinística (`app/scoring.py`). O texto não é guardado.
-- **Envio** (`app.send_digest`, 07:00): `build_digest()` escolhe até 8 artigos acima da nota mínima; um email por assinante via Resend; no primeiro envio aceito, os artigos viram `delivered_at` (isso é a "edição" pública do dia) e o site é revalidado. Sem artigos, não há email.
-- **Nota autoral** (`app.notes`, opcional): texto escrito pelo autor que abre uma edição. Só entra se estiver `approved`; sai uma única vez. Fluxo em `docs/editorial.md`.
+- **Classificação** (`app.process_daily`, 06:50): busca o texto, classifica com Jev, pontua de forma determinística (`app/scoring.py`). O texto não é guardado; as respostas do classificador (`importance`, `feature_strengths`) são, para recalcular notas offline com `app.rescore`.
+- **Envio** (`app.send_digest`, 07:00): `build_digest()` escolhe até 5 artigos acima da nota mínima (70; em dia fraco completa até 3 a partir de 60), o primeiro é o destaque e dá o assunto do email, respeitando as regras editoriais de `config/digest.yaml` (limite por fonte, filtros de título, sem repetir história dos últimos 3 dias); um email por assinante via Resend; no primeiro envio aceito, os artigos viram `delivered_at` (isso é a "edição" pública do dia) e o site é revalidado. Sem artigos, não há email.
+- **Nota autoral** (`app.notes`, opcional): texto escrito pelo autor que abre uma edição. Só entra se estiver `approved`; sai uma única vez. O `url` é opcional (comentário curto sem post). Fluxo em `docs/editorial.md`.
 - **Agendador** (`app/scheduler.py`): roda dentro do processo da API, horário de Brasília; cada slot roda uma vez (`job_runs`) e um job por vez (`pipeline_lock`).
 - **Site:** `digest.joaoac.com` fica no repo `joaoac.com` (pasta `digest/`) e consome `POST /subscribe`, `GET /digests`, `GET /digests/<data>` e `/unsubscribe/<token>` desta API.
 

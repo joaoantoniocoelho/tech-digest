@@ -25,6 +25,19 @@ class RelevanceScoringTestCase(unittest.TestCase):
     def setUp(self):
         self.profile = _load_profile()
 
+    def test_importance_adjustments_can_be_overridden(self):
+        strengths = _strengths(self.profile, security=2)
+        default = calculate_relevance_score(strengths, self.profile, importance=0)
+        candidate = calculate_relevance_score(
+            strengths,
+            self.profile,
+            importance=0,
+            importance_adjustments={0: -30, 1: -8, 2: 5, 3: 12},
+        )
+
+        self.assertEqual(default, 50)
+        self.assertEqual(candidate, 25)
+
     def test_direct_major_model_match_reaches_floor(self):
         score = calculate_relevance_score(
             feature_strengths=_strengths(

@@ -157,11 +157,71 @@ class RenderHtmlDigestTestCase(unittest.TestCase):
         self.assertIn(">02</td>", html)
         self.assertNotIn(">Second</a>", html)
 
-    def test_subject_uses_send_date(self):
+    def test_subject_without_articles_uses_send_date(self):
         self.assertEqual(
             digest_subject(SENT_AT),
             "João Coelho Tech Digest — Sep 22, 2026",
         )
+        self.assertEqual(
+            digest_subject(SENT_AT, [{"title": "  "}]),
+            "João Coelho Tech Digest — Sep 22, 2026",
+        )
+
+    def test_subject_leads_with_the_featured_story(self):
+        def stories(count):
+            return [{"title": "Taking over US Treasury subdomains for $3"}] + [
+                {"title": f"Other {index}"} for index in range(count - 1)
+            ]
+
+        self.assertEqual(
+            digest_subject(SENT_AT, stories(1)),
+            "Taking over US Treasury subdomains for $3",
+        )
+        self.assertEqual(
+            digest_subject(SENT_AT, stories(2)),
+            "Taking over US Treasury subdomains for $3 + 1 link",
+        )
+        self.assertEqual(
+            digest_subject(SENT_AT, stories(5)),
+            "Taking over US Treasury subdomains for $3 + 4 links",
+        )
+
+    def test_subject_shortens_a_long_title_on_a_word(self):
+        title = "We promoted developers into architects without informing them, and it went badly"
+
+        subject = digest_subject(SENT_AT, [{"title": title}, {"title": "Other"}])
+
+        self.assertEqual(
+            subject,
+            "We promoted developers into architects without informing them, and… + 1 link",
+        )
+        self.assertLessEqual(len(subject.split(" + ")[0]), 70)
+
+    def test_subject_shortens_a_title_without_spaces(self):
+        subject = digest_subject(SENT_AT, [{"title": "x" * 100}])
+
+        self.assertEqual(subject, "x" * 69 + "…")
+
+    def test_first_story_is_featured_when_there_are_several(self):
+        digest = _digest()
+        digest["articles"].append({**digest["articles"][0], "id": 8, "title": "Second"})
+
+        html = render_html_digest(digest=digest, sent_at=SENT_AT)
+        text = render_text_digest(digest=digest, show_score=False, show_topics=False)
+
+        self.assertEqual(html.count("today's pick"), 1)
+        self.assertLess(html.index("today's pick"), html.index("Tom &amp; Jerry"))
+        self.assertEqual(html.count("font-size:22px;line-height:28px;"), 1)
+        self.assertIn("today's pick\n1. Tom & Jerry <script>", text)
+        self.assertEqual(text.count("today's pick"), 1)
+
+    def test_a_single_story_has_no_pick_label(self):
+        html = render_html_digest(digest=_digest(), sent_at=SENT_AT)
+        text = render_text_digest(digest=_digest(), show_score=False, show_topics=False)
+
+        self.assertNotIn("today's pick", html)
+        self.assertNotIn("today's pick", text)
+        self.assertNotIn("font-size:22px;line-height:28px;", html)
 
 
 class ShareDigestTestCase(unittest.TestCase):
@@ -423,6 +483,30 @@ class RenderNoteTestCase(unittest.TestCase):
         )
         self.assertLess(text.index("read the full article"), text.index("1. Tom & Jerry"))
 
+    def test_note_without_a_link_has_no_anchor_or_cta(self):
+        note = {**self._note(), "url": ""}
+        kwargs = {"sent_at": SENT_AT}
+
+        html = render_html_digest(digest={**_digest(), "note": note}, **kwargs)
+        text = render_text_digest(
+            digest={**_digest(), "note": note}, show_score=False, show_topics=False
+        )
+
+        self.assertIn(">Why &lt;agents&gt; &amp; reviews</h2>", html)
+        self.assertIn("Second &amp; last paragraph.", html)
+        self.assertNotIn("read the post", html)
+        self.assertNotIn('href=""', html)
+        self.assertIn("Second & last paragraph.", text)
+        self.assertNotIn("read the post", text)
+
+        for missing in (None, "javascript:alert(1)"):
+            with self.subTest(url=missing):
+                html = render_html_digest(
+                    digest={**_digest(), "note": {**self._note(), "url": missing}}, **kwargs
+                )
+                self.assertNotIn("read the post", html)
+                self.assertNotIn("javascript", html)
+
     def test_note_is_dropped_when_there_are_no_articles(self):
         digest = {"lookback_hours": 24, "articles": [], "note": self._note()}
 
@@ -493,7 +577,7 @@ class SendDailyDigestTestCase(unittest.TestCase):
         send_email_mock.assert_called_once()
         kwargs = send_email_mock.call_args.kwargs
         self.assertEqual(kwargs["to"], ["reader@example.com"])
-        self.assertTrue(kwargs["subject"].startswith("João Coelho Tech Digest — "))
+        self.assertEqual(kwargs["subject"], "Example")
         self.assertIn("Example", kwargs["html_body"])
         self.assertIn("joão coelho", kwargs["html_body"])
         self.assertIn(

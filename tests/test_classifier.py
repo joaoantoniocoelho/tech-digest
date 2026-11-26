@@ -216,6 +216,34 @@ class WhyAndTopicsTestCase(unittest.TestCase):
         self.assertEqual(why, "")
         self.assertEqual(topics, [])
 
+    def test_why_shows_only_central_features(self):
+        features = _load_profile()["features"]
+        strengths = _zero_strengths(features)
+        strengths["software_engineering_practices"] = 2
+        strengths["major_ai_model_development"] = 1
+
+        why, topics = _build_why_and_topics(
+            feature_strengths=strengths,
+            features=features,
+        )
+
+        self.assertEqual(why, "Software engineering")
+        self.assertEqual(topics, ["Software engineering", "AI models"])
+
+    def test_why_falls_back_to_secondary_features_when_none_is_central(self):
+        features = _load_profile()["features"]
+        strengths = _zero_strengths(features)
+        strengths["security"] = 1
+        strengths["privacy"] = 1
+
+        why, topics = _build_why_and_topics(
+            feature_strengths=strengths,
+            features=features,
+        )
+
+        self.assertEqual(why, "Security · Privacy")
+        self.assertEqual(topics, ["Security", "Privacy"])
+
     def test_tie_breaks_by_id(self):
         profile = _load_profile()
         features = profile["features"]
@@ -334,10 +362,7 @@ class ClassifyArticleTestCase(unittest.TestCase):
             2,
         )
         self.assertEqual(result["importance"], 2)
-        self.assertEqual(
-            result["why_interesting"],
-            "AI agents · Software engineering",
-        )
+        self.assertEqual(result["why_interesting"], "AI agents")
         self.assertEqual(
             result["topics"],
             ["AI agents", "Software engineering"],

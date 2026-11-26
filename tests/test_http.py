@@ -625,6 +625,38 @@ class HttpApiTestCase(unittest.TestCase):
         status, _headers, body = self.request("GET", "/digests/2026-11-22")
         self.assertIsNone(json.loads(body)["note"])
 
+    def test_edition_note_without_a_link_has_a_null_url(self):
+        with db.get_connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO articles (
+                    source, title, url, relevance_score, processed_at, delivered_at
+                )
+                VALUES ('Feed', 'Story', 'https://example.com/story', 80,
+                        '2026-11-23 10:00:00', '2026-11-23 10:00:00')
+                """
+            )
+        db.save_note_draft(
+            {
+                "slug": "weekly-comment",
+                "title": "This week",
+                "url": "",
+                "intro": "Two short sentences.",
+                "published_at": None,
+            }
+        )
+        db.set_note_approval("weekly-comment", approved=True)
+        note = db.get_pending_note("2026-11-23")
+        assert note is not None
+        db.mark_note_sent(note["id"], "2026-11-23")
+
+        _status, _headers, body = self.request("GET", "/digests/2026-11-23")
+
+        self.assertEqual(
+            json.loads(body)["note"],
+            {"title": "This week", "url": None, "intro": "Two short sentences."},
+        )
+
     def test_notes_have_no_http_admin_surface(self):
         with patch.dict("os.environ", {"DIGEST_JOB_TOKEN": "secret-token"}):
             for method, path in (("GET", "/notes"), ("POST", "/notes/my-post/approve")):

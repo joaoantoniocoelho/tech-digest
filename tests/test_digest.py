@@ -3,7 +3,7 @@ import runpy
 import tempfile
 import unittest
 from contextlib import redirect_stdout
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,10 +16,10 @@ from app.classifier import is_duplicate_story
 from app.digest import build_digest, main
 
 
-def _article(title, score=80, excerpt="", topics=None):
+def _article(title, score=80, excerpt="", topics=None, source="Example"):
     return {
         "title": title,
-        "source": "Example",
+        "source": source,
         "feed_excerpt": excerpt,
         "relevance_score": score,
         "topics": topics or [],
@@ -255,6 +255,194 @@ class DiversitySelectionTestCase(unittest.TestCase):
                     {"ai", "engineering", "security", "business", "systems"},
                     feature_id,
                 )
+
+
+class EditorialRulesTestCase(unittest.TestCase):
+    def _build(self, candidates, config, recent=None, is_duplicate=None):
+        base = {"lookback_hours": 24, "minimum_score": 60, "maximum_articles": 8}
+        self.is_duplicate = is_duplicate or (lambda candidate, known: False)
+        self.duplicate_calls = []
+
+        def record(candidate, known):
+            self.duplicate_calls.append((candidate["title"], [story["title"] for story in known]))
+            return self.is_duplicate(candidate, known)
+
+        with (
+            patch("app.digest.init_db"),
+            patch("app.digest.load_digest_config", return_value={**base, **config}),
+            patch("app.digest.get_digest_candidates", return_value=candidates),
+            patch("app.digest.get_recently_delivered", return_value=recent or []) as get_recent,
+            patch("app.digest.is_duplicate_story", side_effect=record),
+        ):
+            self.get_recent = get_recent
+            return [article["title"] for article in build_digest()["articles"]]
+
+    def test_source_limit_holds_even_when_the_source_has_the_top_scores(self):
+        candidates = [
+            _article(f"HN {score}", score, source="Hacker News") for score in range(95, 87, -1)
+        ] + [_article("Blog post", 61, source="Julia Evans")]
+
+        titles = self._build(candidates, {"source_limits": {"Hacker News": 3}})
+
+        self.assertEqual(titles, ["HN 95", "HN 94", "HN 93", "Blog post"])
+
+    def test_sources_without_a_limit_are_not_capped(self):
+        candidates = [_article(f"Post {score}", score) for score in (90, 85, 80, 75)]
+
+        titles = self._build(candidates, {"source_limits": {"Hacker News": 3}})
+
+        self.assertEqual(len(titles), 4)
+
+    def test_only_one_launch_post_per_edition(self):
+        titles = self._build(
+            [
+                _article("Show HN: A tiny database", 90),
+                _article("Launch HN: Tasklet (YC P26)", 85),
+                _article("show hn: another tool", 80),
+                _article("How we show HN traffic", 75),
+            ],
+            {"title_filters": {"max_launch_posts": 1}},
+        )
+
+        self.assertEqual(titles, ["Show HN: A tiny database", "How we show HN traffic"])
+
+    def test_blocked_titles_never_enter(self):
+        titles = self._build(
+            [
+                _article("Tasklet (YC P26) Is Hiring a founding engineer", 95),
+                _article("Fuck Your AI Safeguards", 90),
+                _article("Switcher (2004)", 85),
+                _article("A good article", 70),
+            ],
+            {
+                "title_filters": {
+                    "blocked_phrases": ["is hiring"],
+                    "blocked_words": ["fuck"],
+                    "block_dated_titles": True,
+                }
+            },
+        )
+
+        self.assertEqual(titles, ["A good article"])
+
+    def test_story_delivered_in_the_window_is_skipped(self):
+        recent = [{"title": "Inkling 2 Mini", "feed_excerpt": ""}]
+
+        titles = self._build(
+            [_article("Inkling 2 Mini is here", 90), _article("Another story", 80)],
+            {"dedup_lookback_days": 3},
+            recent=recent,
+            is_duplicate=lambda candidate, known: candidate["title"].startswith("Inkling"),
+        )
+
+        self.assertEqual(titles, ["Another story"])
+        self.get_recent.assert_called_once_with(3)
+        self.assertEqual(
+            self.duplicate_calls,
+            [
+                ("Inkling 2 Mini is here", ["Inkling 2 Mini"]),
+                ("Another story", ["Inkling 2 Mini"]),
+            ],
+        )
+
+    def test_without_lookback_only_the_edition_is_compared(self):
+        titles = self._build([_article("One", 90), _article("Two", 80)], {})
+
+        self.assertEqual(titles, ["One", "Two"])
+        self.get_recent.assert_not_called()
+        self.assertEqual(self.duplicate_calls, [("Two", ["One"])])
+
+
+class DailyFloorTestCase(unittest.TestCase):
+    CONFIG = {
+        "lookback_hours": 24,
+        "minimum_score": 70,
+        "maximum_articles": 5,
+        "minimum_articles": 3,
+        "fallback_minimum_score": 60,
+    }
+
+    def _build(self, scores, config=None, is_duplicate=None):
+        candidates = [_article(f"Story {score}", score) for score in scores]
+
+        with (
+            patch("app.digest.init_db"),
+            patch("app.digest.load_digest_config", return_value=config or self.CONFIG),
+            patch("app.digest.get_digest_candidates", return_value=candidates) as get_candidates,
+            patch(
+                "app.digest.is_duplicate_story",
+                side_effect=is_duplicate or (lambda candidate, known: False),
+            ),
+        ):
+            self.get_candidates = get_candidates
+            return [article["relevance_score"] for article in build_digest()["articles"]]
+
+    def test_strong_day_never_uses_articles_below_the_cutoff(self):
+        self.assertEqual(self._build([90, 85, 80, 75, 72, 71, 69, 65]), [90, 85, 80, 75, 72])
+        self.get_candidates.assert_called_once_with(lookback_hours=24, minimum_score=60)
+
+    def test_three_above_the_cutoff_are_not_topped_up(self):
+        self.assertEqual(self._build([90, 80, 70, 69, 68]), [90, 80, 70])
+
+    def test_weak_day_is_topped_up_only_to_the_floor(self):
+        self.assertEqual(self._build([75, 69, 66, 64, 61]), [75, 69, 66])
+
+    def test_day_with_nothing_above_the_cutoff_still_has_an_edition(self):
+        self.assertEqual(self._build([68, 65, 63, 61]), [68, 65, 63])
+
+    def test_floor_never_goes_below_the_fallback_score(self):
+        self.assertEqual(self._build([75, 62]), [75, 62])
+        self.assertEqual(self._build([]), [])
+
+    def test_top_up_skips_duplicates_and_tries_the_next_one(self):
+        scores = self._build(
+            [75, 69, 66, 64],
+            is_duplicate=lambda candidate, known: candidate["relevance_score"] == 69,
+        )
+
+        self.assertEqual(scores, [75, 66, 64])
+
+    def test_without_floor_config_the_cutoff_is_strict(self):
+        config = {"lookback_hours": 24, "minimum_score": 70, "maximum_articles": 5}
+
+        self.assertEqual(self._build([75, 72], config), [75, 72])
+        self.get_candidates.assert_called_once_with(lookback_hours=24, minimum_score=70)
+
+
+class RecentlyDeliveredQueryTestCase(unittest.TestCase):
+    def test_returns_only_stories_inside_the_window(self):
+        now = datetime.now(timezone.utc)
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(db, "DB_PATH", Path(tmp) / "digest.db"),
+        ):
+            db.init_db()
+
+            for title, days_ago in (("Two days ago", 2), ("Four days ago", 4), ("Pending", None)):
+                url = f"https://example.com/{title}"
+                db.save_article(
+                    {
+                        "source": "Example",
+                        "title": title,
+                        "url": url,
+                        "published_at": now.isoformat(),
+                        "feed_excerpt": f"Excerpt of {title}",
+                    }
+                )
+
+                if days_ago is not None:
+                    db.mark_articles_delivered(
+                        [db.get_article_by_url(url)["id"]],
+                        delivered_at=now - timedelta(days=days_ago),
+                    )
+
+            recent = db.get_recently_delivered(3)
+
+        self.assertEqual(
+            recent,
+            [{"title": "Two days ago", "feed_excerpt": "Excerpt of Two days ago"}],
+        )
 
 
 class CandidateQueryTestCase(unittest.TestCase):

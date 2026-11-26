@@ -103,6 +103,46 @@ class CollectionTests(unittest.TestCase):
         with db.get_connection() as connection:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM articles").fetchone()[0], 1)
 
+    @patch("app.main.fetch_feed")
+    def test_blocked_titles_are_not_saved(self, fetch_feed):
+        config = """sources:
+  - name: Hacker News
+    url: https://news.ycombinator.com/rss
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as file:
+            file.write(config)
+            config_path = Path(file.name)
+        self.addCleanup(config_path.unlink)
+        fetch_feed.return_value = [
+            {
+                "source": "Hacker News",
+                "title": title,
+                "url": f"https://example.com/{index}",
+                "published_at": "2026-09-22",
+            }
+            for index, title in enumerate(
+                ["Tasklet (YC P26) Is Hiring Engineers", "Hiring is broken", "Switcher (2004)"]
+            )
+        ]
+        with (
+            patch.object(main, "Path", return_value=config_path),
+            patch.object(
+                main,
+                "load_digest_config",
+                return_value={
+                    "title_filters": {
+                        "blocked_phrases": ["is hiring"],
+                        "block_dated_titles": True,
+                    }
+                },
+            ),
+            redirect_stdout(StringIO()),
+        ):
+            self.assertEqual(main.collect_feeds(), 1)
+        with db.get_connection() as connection:
+            titles = [row[0] for row in connection.execute("SELECT title FROM articles")]
+        self.assertEqual(titles, ["Hiring is broken"])
+
 
 if __name__ == "__main__":
     unittest.main()

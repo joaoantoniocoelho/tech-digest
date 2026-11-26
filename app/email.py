@@ -136,12 +136,37 @@ def _format_article_date(
     return f"{_MONTHS_SHORT[local.month - 1]} {local.day}".lower()
 
 
+SUBJECT_TITLE_LIMIT = 70
+
+
+def _shorten(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+
+    cut = text[: limit - 1]
+    # Break on a word when there is one to break on.
+    head = cut.rsplit(" ", 1)[0] if " " in cut else cut
+
+    return head.rstrip(" ,;:-") + "…"
+
+
 def digest_subject(
     sent_at: datetime | None = None,
+    articles: list[dict] | None = None,
 ) -> str:
     sent_at = sent_at or datetime.now().astimezone()
+    lead = _clean((articles or [{}])[0].get("title"))
 
-    return "João Coelho Tech Digest — " + _format_calendar_date(sent_at)
+    if not lead:
+        return "João Coelho Tech Digest — " + _format_calendar_date(sent_at)
+
+    lead = _shorten(" ".join(lead.split()), SUBJECT_TITLE_LIMIT)
+    others = len(articles or []) - 1
+
+    if others < 1:
+        return lead
+
+    return f"{lead} + {others} " + ("link" if others == 1 else "links")
 
 
 def _article_href(url: str) -> str:
@@ -178,16 +203,29 @@ def _story_meta(
     return " · ".join(parts)
 
 
+FEATURED_LABEL = "today's pick"
+
+
 def _render_story(
     number: int,
     article: dict,
     last: bool,
     show_score: bool,
     show_topics: bool,
+    featured: bool = False,
 ) -> str:
     title = _clean(article.get("title")) or "Untitled"
     href = _article_href(_clean(article.get("url")))
     meta = _story_meta(article, show_score, show_topics)
+    title_size = (
+        "font-size:22px;line-height:28px;" if featured else "font-size:18px;line-height:24px;"
+    )
+    label_html = ""
+    if featured:
+        label_html = (
+            f'<p style="margin:0 0 4px;{_sans(600)}font-size:13px;line-height:18px;'
+            f'color:{MUTED};">{FEATURED_LABEL}</p>'
+        )
 
     title_html = _esc(title)
     if href:
@@ -211,7 +249,8 @@ def _render_story(
         f'<td width="36" valign="top" style="width:36px;padding:18px 12px 18px 0;{border}'
         f'{_sans()}font-size:13px;line-height:24px;color:{FAINT};">{number:02d}</td>'
         f'<td valign="top" style="padding:18px 0;{border}">'
-        f'<h2 class="story" style="margin:0;{_sans(600)}font-size:18px;line-height:24px;'
+        f"{label_html}"
+        f'<h2 class="story" style="margin:0;{_sans(600)}{title_size}'
         f'color:{INK};">{title_html}</h2>'
         f"{meta_html}"
         "</td></tr>"
@@ -269,6 +308,16 @@ NOTE_CTA = "read the full article"
 
 def _render_note(note: dict) -> str:
     href = _esc(_article_href(_clean(note.get("url"))))
+    title_html = _esc(_clean(note.get("title")))
+    cta_html = ""
+    # A note without a link is a short comment, not a pointer to a post.
+    if href:
+        title_html = f'<a href="{href}" style="color:{INK};text-decoration:none;">{title_html}</a>'
+        cta_html = (
+            f'<p style="margin:12px 0 0;"><a href="{href}" style="{_sans(600)}font-size:14px;'
+            f"line-height:20px;color:{INK};text-decoration:underline;"
+            f'text-underline-offset:2px;">{NOTE_CTA}&nbsp;&rarr;</a></p>'
+        )
     paragraphs = "".join(
         f'<p style="margin:10px 0 0;{_sans()}font-size:15px;line-height:22px;'
         f'color:{COPY};">{_esc(paragraph)}</p>'
@@ -280,12 +329,9 @@ def _render_note(note: dict) -> str:
         f'<p style="margin:0;{_sans(600)}font-size:13px;line-height:18px;'
         f'color:{MUTED};">{NOTE_LABEL}</p>'
         f'<h2 class="story" style="margin:6px 0 0;{_sans(600)}font-size:18px;line-height:24px;'
-        f'color:{INK};"><a href="{href}" style="color:{INK};text-decoration:none;">'
-        f"{_esc(_clean(note.get('title')))}</a></h2>"
+        f'color:{INK};">{title_html}</h2>'
         f"{paragraphs}"
-        f'<p style="margin:12px 0 0;"><a href="{href}" style="{_sans(600)}font-size:14px;'
-        f"line-height:20px;color:{INK};text-decoration:underline;"
-        f'text-underline-offset:2px;">{NOTE_CTA}&nbsp;&rarr;</a></p>'
+        f"{cta_html}"
         "</td></tr>"
     )
 
@@ -319,6 +365,8 @@ def _render_stories(
             last=index == len(articles),
             show_score=show_score,
             show_topics=show_topics,
+            # A lone article needs no "pick" label.
+            featured=index == 1 and len(articles) > 1,
         )
         for index, article in enumerate(articles, start=1)
     )

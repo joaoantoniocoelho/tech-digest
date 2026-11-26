@@ -10,8 +10,15 @@ processing_lookback_hours: 28
 # discovered_at as fallback. Keep this near 24 hours so the
 # digest stays a daily newspaper rather than a historical archive.
 lookback_hours: 24
-minimum_score: 60
-maximum_articles: 8
+minimum_score: 70
+maximum_articles: 5
+
+# Keeps the digest daily. When fewer than `minimum_articles` pass
+# `minimum_score`, the edition is topped up to that size with the
+# best candidates at or above `fallback_minimum_score`. The same
+# title rules, source caps and deduplication apply to them.
+minimum_articles: 3
+fallback_minimum_score: 60
 
 show_score: false
 show_topics: false
@@ -27,3 +34,32 @@ diversity:
   free_per_group:
     ai: 2
     engineering: 2
+
+# Per-source cap. Aggregators send dozens of candidates a day and
+# would otherwise fill every slot; primary sources are not capped.
+source_limits:
+  Hacker News: 3
+  Lobsters: 2
+
+# A candidate that repeats a story delivered in the last N days is
+# skipped, the same way as a repeat inside one edition.
+dedup_lookback_days: 3
+
+# Fixed title rules, applied at collection and at selection.
+title_filters:
+  # Whole phrases, case-insensitive.
+  blocked_phrases:
+    - is hiring
+  # Matched at the start of a word, so inflections are caught too.
+  blocked_words:
+    - fuck
+    - motherfuck
+    - shit
+    - bullshit
+    - asshole
+    - bitch
+    - cunt
+  # Drops resurfaced posts tagged with a past year, e.g. "(2004)".
+  block_dated_titles: true
+  # "Show HN:" / "Launch HN:" posts allowed per edition.
+  max_launch_posts: 1

@@ -72,8 +72,9 @@ def normalize_note(payload: Mapping[str, object]) -> dict:
     if not isinstance(slug, str) or not _SLUG_RE.fullmatch(slug) or len(slug) > MAX_SLUG_LENGTH:
         raise ValueError("slug must be lowercase letters, digits and hyphens")
 
-    url = payload.get("url")
-    if (
+    # No url means a short comment that stands on its own, with no post to read.
+    url = payload.get("url") or ""
+    if url and (
         not isinstance(url, str)
         or len(url) > MAX_URL_LENGTH
         or any(character.isspace() for character in url)

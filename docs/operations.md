@@ -62,7 +62,7 @@ Historical feed entries outside that window are left unprocessed. They remain in
 python -m app.digest
 ```
 
-This selects recent classified articles, applies the relevance threshold (`minimum_score: 60`) and article cap (`maximum_articles: 8`), and prints the digest. It does not send email and does not mark articles as delivered.
+This selects recent classified articles, applies the relevance threshold (`minimum_score: 70`, topped up to 3 articles from 60 on weak days) and article cap (`maximum_articles: 5`), and prints the digest. It does not send email and does not mark articles as delivered.
 
 To see the email itself, with and without an authorial note, use sample articles:
 
@@ -365,3 +365,16 @@ errors
 ```
 
 It should not contain the full extracted article text.
+
+## Rescoring Stored Answers
+
+Each classification stores the classifier's answers (`articles.importance` and `articles.feature_strengths`), not only the final score. `app.rescore` recomputes those answers with a candidate formula and prints, per day, the edition it would pick next to what was actually sent. It only reads the database and never calls the classifier.
+
+```bash
+python -m app.rescore --days 7
+python -m app.rescore --days 7 --importance=-30,-8,5,12 --minimum-score 70
+```
+
+`--importance` takes the points for importance 0, 1, 2 and 3 and needs the equals sign, because the values start with a minus. Lines are marked `sent` (delivered and still selected), `new ` (selected only by the candidate formula) and `drop` (delivered, but not selected by it). The report applies the cutoff, title rules and source caps; it leaves out diversity and story deduplication, so it is an upper bound. Articles classified before 2026-11-25 have no stored answers and are not listed.
+
+In production: `scripts/prod app.rescore --days 7`.

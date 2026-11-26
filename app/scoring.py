@@ -28,6 +28,7 @@ def calculate_relevance_score(
     feature_strengths: dict,
     profile: dict,
     importance: int,
+    importance_adjustments: dict[int, int] | None = None,
 ) -> int:
     positive_contributions = []
     negative_penalty = 0.0
@@ -56,7 +57,7 @@ def calculate_relevance_score(
 
         score += contribution * multiplier
 
-    score += IMPORTANCE_ADJUSTMENTS[importance]
+    score += (importance_adjustments or IMPORTANCE_ADJUSTMENTS)[importance]
 
     score -= min(negative_penalty, 25)
 
