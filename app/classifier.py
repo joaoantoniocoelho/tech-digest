@@ -12,6 +12,9 @@ from app.scoring import (
 
 IMPORTANCE_ID = "importance"
 MAX_WHY_FEATURES = 3
+# Labels shown next to a link. The classifier marks most matching topics
+# as central, so filtering by strength alone still listed three or more.
+MAX_WHY_LABELS = 2
 
 FEATURE_STRENGTH_THRESHOLDS = (0.75, 1.50)
 IMPORTANCE_SCORE_THRESHOLDS = (0.50, 1.50, 2.50)
@@ -307,9 +310,10 @@ def _build_why_and_topics(
         for feature_id, label in zip(top_ids, labels, strict=True)
         if feature_strengths[feature_id] == 2
     ]
-    why_interesting = " · ".join(central or labels)
+    shown = (central or labels)[:MAX_WHY_LABELS]
 
-    return why_interesting, labels
+    # The site lists `topics` next to each link, so it shows the same labels.
+    return " · ".join(shown), shown
 
 
 def _match_counts(

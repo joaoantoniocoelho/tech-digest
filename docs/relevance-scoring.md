@@ -176,7 +176,7 @@ Importance is a small adjustment after feature scoring (`-5 / 0 / +5 / +8`).
 
 Known limit: this makes the score mostly a measure of topic. Two central features already add up to about 70, while quality moves it by 13 points at most, so scores bunch between 61 and 85. The classifier's answers are stored per article (`importance`, `feature_strengths`) so a formula that gives importance real weight can be tested offline with `python -m app.rescore` before it replaces this one (see [operations](operations.md#rescoring-stored-answers)).
 
-The Why line lists only central features (strength 2). Secondary ones appear only when no feature is central: a passing mention shown next to a link reads as a wrong topic. `topics` still keeps the top three.
+The Why line lists at most two features, the strongest central ones (strength 2) by score contribution. Secondary ones appear only when no feature is central: a passing mention shown next to a link reads as a wrong topic. The classifier marks most matching features as central (articles at 70 or more had 4 to 9), so the strength filter alone still listed three. `topics` holds the same labels, because the site lists them next to each link.
 
 Negative features apply a capped penalty (at most 25 points).
 
@@ -230,10 +230,13 @@ Duplicate detection (Jev) runs on each pick as before. It also drops an article 
 Fixed rules in `config/digest.yaml` run before ranking decides anything. They are deterministic and never call the model (`app/filters.py`):
 
 - `source_limits`: at most this many articles per source in one edition (Hacker News 3, Lobsters 2). Aggregators send dozens of candidates a day and would otherwise fill every slot. A capped candidate is skipped and the next one is tried; sources without an entry are not capped.
+- `aggregators`: a combined cap for the aggregators (Hacker News and Lobsters, 3 together). Each stays under its own limit, but together they could still fill a five-link edition, as on 2026-11-27 (3 + 2). The remaining slots go to primary sources; on a day with none above the cutoff, the edition is shorter.
 - `title_filters.blocked_phrases`: job posts (`is hiring`).
 - `title_filters.blocked_words`: profanity, matched at the start of a word.
 - `title_filters.block_dated_titles`: titles ending in a past year, such as `(2004)`.
 - `title_filters.max_launch_posts`: at most one `Show HN:` / `Launch HN:` post per edition.
+
+Sources that publish a few times a week have a longer window (`lookback_hours: 72` per source in `config/sources.yaml`). With the 24-hour window, a blog post was eligible for one morning at most, and most never landed inside it. A post that stays unpicked can come back on the next two mornings; cross-day deduplication only covers delivered stories.
 
 Blocked titles are also dropped at collection, so they are never classified. An edition can therefore be shorter than `maximum_articles` even when more candidates pass `minimum_score`.
 

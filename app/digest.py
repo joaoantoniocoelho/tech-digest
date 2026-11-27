@@ -28,11 +28,33 @@ from app.notes import note_paragraphs
 
 CONFIG_PATH = Path("config/digest.yaml")
 INTERESTS_PATH = Path("config/interests.yaml")
+SOURCES_PATH = Path("config/sources.yaml")
 
 
 def load_digest_config() -> dict:
     with CONFIG_PATH.open() as file:
         return yaml.safe_load(file)
+
+
+def load_source_lookbacks() -> dict[str, int]:
+    """Per-source selection window, for sources that publish less than daily."""
+    with SOURCES_PATH.open() as file:
+        sources = yaml.safe_load(file)["sources"]
+
+    lookbacks = {}
+
+    for source in sources:
+        if "lookback_hours" not in source:
+            continue
+
+        hours = source["lookback_hours"]
+
+        if isinstance(hours, bool) or not isinstance(hours, int) or hours <= 0:
+            raise ValueError(f"lookback_hours of {source['name']} must be a positive integer")
+
+        lookbacks[source["name"]] = hours
+
+    return lookbacks
 
 
 def load_topic_groups() -> dict:
@@ -74,6 +96,14 @@ def _diversity_score(
     return article["relevance_score"] - diversity.get("penalty", 0) * repeats
 
 
+def get_processing_source_lookbacks() -> dict[str, int]:
+    """Per-source classification window, with the same margin as the default one."""
+    config = load_digest_config()
+    margin = get_processing_lookback_hours() - int(config["lookback_hours"])
+
+    return {source: hours + max(margin, 0) for source, hours in load_source_lookbacks().items()}
+
+
 def get_processing_lookback_hours() -> int:
     config = load_digest_config()
 
@@ -100,6 +130,7 @@ def build_digest() -> dict:
     candidates = get_digest_candidates(
         lookback_hours=lookback_hours,
         minimum_score=fallback_score,
+        source_lookback_hours=load_source_lookbacks(),
     )
 
     # Diversity only reorders candidates that already passed
@@ -111,6 +142,9 @@ def build_digest() -> dict:
 
     title_filters = config.get("title_filters") or {}
     source_limits = config.get("source_limits") or {}
+    aggregators = config.get("aggregators") or {}
+    aggregator_sources = set(aggregators.get("sources") or [])
+    aggregator_limit = aggregators.get("limit")
     max_launch_posts = title_filters.get("max_launch_posts")
     dedup_days = config.get("dedup_lookback_days") or 0
     recently_delivered = get_recently_delivered(dedup_days) if dedup_days else []
@@ -121,6 +155,7 @@ def build_digest() -> dict:
     skipped_source = 0
     skipped_launch = 0
     source_counts: dict[str, int] = {}
+    aggregator_count = 0
     launch_posts = 0
     allowed = [
         candidate
@@ -163,6 +198,12 @@ def build_digest() -> dict:
             skipped_source += 1
             continue
 
+        is_aggregator = source in aggregator_sources
+
+        if is_aggregator and aggregator_limit is not None and aggregator_count >= aggregator_limit:
+            skipped_source += 1
+            continue
+
         is_launch = is_launch_post(candidate["title"])
 
         if is_launch and max_launch_posts is not None and launch_posts >= max_launch_posts:
@@ -183,6 +224,7 @@ def build_digest() -> dict:
 
         articles.append(candidate)
         source_counts[source] = source_counts.get(source, 0) + 1
+        aggregator_count += is_aggregator
         launch_posts += is_launch
 
         group = groups[id(candidate)]

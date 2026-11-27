@@ -1,3 +1,6 @@
+# `lookback_hours` keeps a source's posts eligible for longer than the
+# digest's 24-hour window. Blogs publish a few times a week or less,
+# so a day-old post from them is still news to the reader.
 sources:
   # Discovery / aggregators
 
@@ -11,34 +14,43 @@ sources:
 
   - name: Sean Goedecke
     url: https://www.seangoedecke.com/rss.xml
+    lookback_hours: 72
 
   - name: The Pragmatic Engineer
     url: https://newsletter.pragmaticengineer.com/feed
+    lookback_hours: 72
 
   - name: Julia Evans
     url: https://jvns.ca/atom.xml
+    lookback_hours: 72
 
   # The feed carries the whole archive; only the newest posts matter.
   - name: Dan Luu
     url: https://danluu.com/atom.xml
     max_entries: 5
+    lookback_hours: 72
 
   - name: Cloudflare Blog
     url: https://blog.cloudflare.com/rss/
+    lookback_hours: 72
 
   - name: GitHub Engineering
     url: https://github.blog/engineering/feed/
+    lookback_hours: 72
 
   # AI / AI engineering
 
   - name: Latent Space
     url: https://www.latent.space/feed
+    lookback_hours: 72
 
   - name: Interconnects
     url: https://www.interconnects.ai/feed
+    lookback_hours: 72
 
   - name: Simon Willison
-    url: https://simonwillison.net/atom/everything/
+    url: https://simonwillison.net/atom/entries/
+    lookback_hours: 72
 
   - name: OpenAI
     url: https://openai.com/news/rss.xml
@@ -47,15 +59,15 @@ sources:
   - name: Google DeepMind
     url: https://deepmind.google/blog/rss.xml
     max_entries: 20
+    lookback_hours: 72
 
   # Technology news / startups
 
   - name: TechCrunch
     url: https://techcrunch.com/feed/
 
-
-
   # Technology business / strategy
 
   - name: Stratechery
     url: https://stratechery.com/feed/
+    lookback_hours: 72

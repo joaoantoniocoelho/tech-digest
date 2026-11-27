@@ -4,7 +4,7 @@ from app.db import (
     get_articles_for_daily_processing,
     init_db,
 )
-from app.digest import get_processing_lookback_hours
+from app.digest import get_processing_lookback_hours, get_processing_source_lookbacks
 from app.log import log_event
 from app.processor import process_articles
 
@@ -16,6 +16,7 @@ def process_daily() -> dict:
 
     articles = get_articles_for_daily_processing(
         lookback_hours=lookback_hours,
+        source_lookback_hours=get_processing_source_lookbacks(),
     )
 
     print()

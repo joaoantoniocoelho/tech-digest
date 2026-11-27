@@ -311,10 +311,10 @@ app/telegram.py
 
 The digest selects recent classified articles that:
 
-- fall inside the digest lookback window (`lookback_hours: 24`);
+- fall inside the digest lookback window (`lookback_hours: 24`, or the source's own `lookback_hours` in `config/sources.yaml`, 72 for blogs that publish a few times a week);
 - meet the relevance threshold (`minimum_score: 70`); on a day with fewer than 3 such articles (`minimum_articles`), the edition is topped up to 3 with the best ones at or above `fallback_minimum_score: 60`, so the digest stays daily;
 - stay under the article cap (`maximum_articles: 5`);
-- respect the per-source cap and the fixed title rules (`source_limits`, `title_filters`);
+- respect the per-source cap, the combined aggregator cap and the fixed title rules (`source_limits`, `aggregators`, `title_filters`);
 - do not repeat a story from this edition or from the last 3 days (`dedup_lookback_days`);
 - have not already been delivered.
 
