@@ -54,6 +54,8 @@ processing_lookback_hours: 28
 
 28 hours is a 24-hour newspaper window plus the 4-hour collection cadence. That way an article published after the last collection before processing is still classified the next morning, instead of being dropped as too old.
 
+A source with its own `lookback_hours` in `config/sources.yaml` is classified over that window plus the same margin (72 + 4 = 76 hours).
+
 Historical feed entries outside that window are left unprocessed. They remain in SQLite, but they are not sent to the classifier.
 
 ## Preview the Digest

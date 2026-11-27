@@ -288,8 +288,9 @@ def article_datetime(
 
 def get_articles_for_daily_processing(
     lookback_hours: int,
+    source_lookback_hours: dict[str, int] | None = None,
 ):
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
+    now = datetime.now(timezone.utc)
 
     with get_connection() as connection:
         rows = connection.execute(
@@ -318,6 +319,7 @@ def get_articles_for_daily_processing(
             row["discovered_at"],
         )
 
+        cutoff = _source_cutoff(now, row["source"], lookback_hours, source_lookback_hours)
         in_window = published_time is not None and published_time >= cutoff
         in_flight_retry = attempts > 0
 
@@ -540,12 +542,24 @@ def record_processing_error(
         return row
 
 
+def _source_cutoff(
+    now: datetime,
+    source: str,
+    lookback_hours: int,
+    source_lookback_hours: dict[str, int] | None,
+) -> datetime:
+    hours = (source_lookback_hours or {}).get(source, lookback_hours)
+
+    return now - timedelta(hours=hours)
+
+
 def get_digest_candidates(
     lookback_hours: int,
     minimum_score: int,
     maximum_articles: int | None = None,
+    source_lookback_hours: dict[str, int] | None = None,
 ):
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
+    now = datetime.now(timezone.utc)
 
     with get_connection() as connection:
         rows = connection.execute(
@@ -583,6 +597,8 @@ def get_digest_candidates(
             row["published_at"],
             row["discovered_at"],
         )
+
+        cutoff = _source_cutoff(now, row["source"], lookback_hours, source_lookback_hours)
 
         if candidate_datetime is None or candidate_datetime < cutoff:
             continue

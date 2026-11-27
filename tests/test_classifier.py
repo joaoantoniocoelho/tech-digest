@@ -191,12 +191,14 @@ class WhyAndTopicsTestCase(unittest.TestCase):
                 "ai_agents",
             ],
         )
+        # Three central matches rank, but only the two strongest are shown.
         self.assertEqual(
             why,
-            "AI models · Developer tools · AI agents",
+            "AI models · Developer tools",
         )
         self.assertEqual(topics, why.split(" · "))
-        self.assertEqual(len(topics), 3)
+        self.assertEqual(len(topics), 2)
+        self.assertNotIn("AI agents", why)
         self.assertNotIn("Crypto & Web3", why)
         self.assertNotIn("Generic consumer tech", why)
         self.assertNotIn("Software engineering", why)
@@ -228,7 +230,8 @@ class WhyAndTopicsTestCase(unittest.TestCase):
         )
 
         self.assertEqual(why, "Software engineering")
-        self.assertEqual(topics, ["Software engineering", "AI models"])
+        # The site lists topics next to the link, so they match the Why.
+        self.assertEqual(topics, ["Software engineering"])
 
     def test_why_falls_back_to_secondary_features_when_none_is_central(self):
         features = _load_profile()["features"]
@@ -259,7 +262,7 @@ class WhyAndTopicsTestCase(unittest.TestCase):
 
         self.assertEqual(
             why,
-            "Software engineering · AI-assisted engineering · Developer tools",
+            "Software engineering · AI-assisted engineering",
         )
         self.assertEqual(topics, why.split(" · "))
 
@@ -365,7 +368,7 @@ class ClassifyArticleTestCase(unittest.TestCase):
         self.assertEqual(result["why_interesting"], "AI agents")
         self.assertEqual(
             result["topics"],
-            ["AI agents", "Software engineering"],
+            ["AI agents"],
         )
         self.assertNotIn(
             "Crypto & Web3",

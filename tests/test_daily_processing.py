@@ -241,6 +241,42 @@ class DailyProcessingTestCase(unittest.TestCase):
 
         self.assertEqual(eligible, [])
 
+    def test_slow_source_stays_eligible_for_its_own_window(self):
+        blog = self._insert(source="Julia Evans", title="Blog post", published_at=_hours_ago(60))
+        self._insert(source="Hacker News", title="Old HN item", published_at=_hours_ago(60))
+        self._insert(source="Julia Evans", title="Older post", published_at=_hours_ago(90))
+
+        eligible = get_articles_for_daily_processing(
+            lookback_hours=28,
+            source_lookback_hours={"Julia Evans": 76},
+        )
+
+        self.assertEqual([item["id"] for item in eligible], [blog["id"]])
+
+    def test_slow_source_candidate_uses_its_own_window(self):
+        blog = self._insert(
+            source="Julia Evans",
+            title="Two-day-old post",
+            published_at=_hours_ago(48),
+            processed_at=_hours_ago(1),
+            relevance_score=80,
+        )
+        self._insert(
+            source="Hacker News",
+            title="Two-day-old HN item",
+            published_at=_hours_ago(48),
+            processed_at=_hours_ago(1),
+            relevance_score=90,
+        )
+
+        candidates = get_digest_candidates(
+            lookback_hours=24,
+            minimum_score=60,
+            source_lookback_hours={"Julia Evans": 72},
+        )
+
+        self.assertEqual([item["id"] for item in candidates], [blog["id"]])
+
     def test_digest_still_uses_publication_window(self):
         recent = self._insert(
             title="Recent classified",

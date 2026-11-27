@@ -7,13 +7,18 @@ from datetime import datetime, timedelta, timezone
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 runpy.run_path(str(Path(__file__).with_name("_bootstrap.py")))
 
 from app import db
 from app.classifier import is_duplicate_story
-from app.digest import build_digest, main
+from app.digest import (
+    build_digest,
+    get_processing_source_lookbacks,
+    load_source_lookbacks,
+    main,
+)
 
 
 def _article(title, score=80, excerpt="", topics=None, source="Example"):
@@ -117,6 +122,7 @@ class DigestSelectionTestCase(unittest.TestCase):
         get_candidates.assert_called_once_with(
             lookback_hours=24,
             minimum_score=60,
+            source_lookback_hours=ANY,
         )
 
     @patch("app.digest.is_duplicate_story")
@@ -286,6 +292,37 @@ class EditorialRulesTestCase(unittest.TestCase):
 
         self.assertEqual(titles, ["HN 95", "HN 94", "HN 93", "Blog post"])
 
+    def test_aggregators_together_stay_under_their_combined_limit(self):
+        candidates = [
+            _article("HN 95", 95, source="Hacker News"),
+            _article("Lobsters 94", 94, source="Lobsters"),
+            _article("HN 93", 93, source="Hacker News"),
+            _article("Lobsters 92", 92, source="Lobsters"),
+            _article("Blog 75", 75, source="Latent Space"),
+            _article("Blog 71", 71, source="Cloudflare Blog"),
+        ]
+        config = {
+            "maximum_articles": 5,
+            "source_limits": {"Hacker News": 3, "Lobsters": 2},
+            "aggregators": {"sources": ["Hacker News", "Lobsters"], "limit": 3},
+        }
+
+        titles = self._build(candidates, config)
+
+        self.assertEqual(titles, ["HN 95", "Lobsters 94", "HN 93", "Blog 75", "Blog 71"])
+
+    def test_day_without_primary_sources_is_shorter_not_filled_by_aggregators(self):
+        candidates = [_article(f"HN {score}", score, source="Hacker News") for score in (95, 90)]
+        candidates += [
+            _article(f"Lobsters {score}", score, source="Lobsters") for score in (85, 80)
+        ]
+        config = {
+            "maximum_articles": 5,
+            "aggregators": {"sources": ["Hacker News", "Lobsters"], "limit": 3},
+        }
+
+        self.assertEqual(self._build(candidates, config), ["HN 95", "HN 90", "Lobsters 85"])
+
     def test_sources_without_a_limit_are_not_capped(self):
         candidates = [_article(f"Post {score}", score) for score in (90, 85, 80, 75)]
 
@@ -379,7 +416,9 @@ class DailyFloorTestCase(unittest.TestCase):
 
     def test_strong_day_never_uses_articles_below_the_cutoff(self):
         self.assertEqual(self._build([90, 85, 80, 75, 72, 71, 69, 65]), [90, 85, 80, 75, 72])
-        self.get_candidates.assert_called_once_with(lookback_hours=24, minimum_score=60)
+        self.get_candidates.assert_called_once_with(
+            lookback_hours=24, minimum_score=60, source_lookback_hours=ANY
+        )
 
     def test_three_above_the_cutoff_are_not_topped_up(self):
         self.assertEqual(self._build([90, 80, 70, 69, 68]), [90, 80, 70])
@@ -406,7 +445,53 @@ class DailyFloorTestCase(unittest.TestCase):
         config = {"lookback_hours": 24, "minimum_score": 70, "maximum_articles": 5}
 
         self.assertEqual(self._build([75, 72], config), [75, 72])
-        self.get_candidates.assert_called_once_with(lookback_hours=24, minimum_score=70)
+        self.get_candidates.assert_called_once_with(
+            lookback_hours=24, minimum_score=70, source_lookback_hours=ANY
+        )
+
+
+class SourceLookbackTestCase(unittest.TestCase):
+    def test_reads_windows_from_the_sources_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sources.yaml"
+            path.write_text(
+                "sources:\n"
+                "  - name: Hacker News\n    url: https://hn.example/rss\n"
+                "  - name: A blog\n    url: https://blog.example/feed\n    lookback_hours: 72\n",
+                encoding="utf-8",
+            )
+
+            with patch("app.digest.SOURCES_PATH", path):
+                self.assertEqual(load_source_lookbacks(), {"A blog": 72})
+
+    def test_rejects_an_invalid_window(self):
+        for value in ("0", "-5", "true", "'72'"):
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "sources.yaml"
+                path.write_text(
+                    "sources:\n  - name: A blog\n    url: https://blog.example/feed\n"
+                    f"    lookback_hours: {value}\n",
+                    encoding="utf-8",
+                )
+
+                with patch("app.digest.SOURCES_PATH", path), self.assertRaises(ValueError):
+                    load_source_lookbacks()
+
+    def test_classification_window_keeps_the_default_margin(self):
+        config = {"lookback_hours": 24, "processing_lookback_hours": 28}
+
+        with (
+            patch("app.digest.load_digest_config", return_value=config),
+            patch("app.digest.load_source_lookbacks", return_value={"A blog": 72}),
+        ):
+            self.assertEqual(get_processing_source_lookbacks(), {"A blog": 76})
+
+    def test_production_sources_config_is_valid(self):
+        lookbacks = load_source_lookbacks()
+
+        self.assertNotIn("Hacker News", lookbacks)
+        self.assertNotIn("Lobsters", lookbacks)
+        self.assertTrue(all(hours >= 24 for hours in lookbacks.values()))
 
 
 class RecentlyDeliveredQueryTestCase(unittest.TestCase):

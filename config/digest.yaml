@@ -41,6 +41,16 @@ source_limits:
   Hacker News: 3
   Lobsters: 2
 
+# Combined cap for the aggregators. Each one alone stays under its
+# own limit, but together they could still fill a five-link edition;
+# this keeps the remaining slots for primary sources. On a day with
+# no primary source above the cutoff, the edition is shorter.
+aggregators:
+  sources:
+    - Hacker News
+    - Lobsters
+  limit: 3
+
 # A candidate that repeats a story delivered in the last N days is
 # skipped, the same way as a repeat inside one edition.
 dedup_lookback_days: 3
